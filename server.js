@@ -27,10 +27,7 @@ cloudinary.config({
 // ==================== SOCKET.IO ====================
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: {
-        origin: "*",
-        credentials: true
-    },
+    cors: { origin: "*", credentials: true },
     transports: ['websocket', 'polling'],
     allowEIO3: true
 });
@@ -119,7 +116,6 @@ async function emitRatingUpdate(filmId) {
     }
 }
 
-// ==================== SOCKET.IO CONNECTION ====================
 io.on('connection', (socket) => {
     console.log('🔌 Client connected:', socket.id);
     socket.on('join-film', (filmId) => socket.join(`film_${filmId}`));
@@ -410,10 +406,10 @@ app.use((req, res) => {
 });
 
 // ==================== MONGOOSE CONNECTION & START SERVER ====================
-// Opsi koneksi untuk mongoose 7+ (tanpa useNewUrlParser/useUnifiedTopology)
+// Opsi koneksi tanpa useNewUrlParser/useUnifiedTopology (sudah default)
 const mongooseOptions = {
     serverSelectionTimeoutMS: 5000,
-    // Hanya untuk development, hapus atau set false untuk production
+    // Untuk development, izinkan sertifikat tidak valid
     tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
 };
 
@@ -457,7 +453,6 @@ mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
 
         console.log('✅ Seeding complete');
 
-        // START SERVER
         server.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
             console.log(`✅ Socket.IO & MongoDB ready`);
