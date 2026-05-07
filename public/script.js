@@ -1071,8 +1071,19 @@ function addCommentToUI(comment) {
 
 // ==================== MODAL REPORT ====================
 function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    console.log('showReportModal called with:', {
+        filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp
+    });
+    // Konversi timestamp ke number jika perlu
+    const safeTimestamp = typeof timestamp === 'number' ? timestamp : parseInt(timestamp);
+    
     const existingModal = document.getElementById("reportModal");
     if (existingModal) existingModal.remove();
+    
+    // Escape semua string untuk mencegah error
+    const safeFilmTitle = escapeHtml(filmTitle);
+    const safeReportedByName = escapeHtml(reportedByName);
+    const safeComment = escapeHtml(comment);
     
     const modalHtml = `
         <div id="reportModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:2000; justify-content:center; align-items:center;">
@@ -1083,10 +1094,10 @@ function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comm
                 </div>
                 <div class="modal-body" style="padding:20px;">
                     <div style="margin-bottom:15px; padding:12px; background:#fef3c7; border-radius:12px;">
-                        <div><strong>👤 Penulis:</strong> ${escapeHtml(reportedByName)}</div>
-                        <div><strong>💬 Komentar:</strong> "${escapeHtml(comment)}"</div>
+                        <div><strong>👤 Penulis:</strong> ${safeReportedByName}</div>
+                        <div><strong>💬 Komentar:</strong> "${safeComment}"</div>
                         <div><strong>⭐ Rating:</strong> ${rating}/10</div>
-                        <div><strong>🎬 Film:</strong> ${escapeHtml(filmTitle)}</div>
+                        <div><strong>🎬 Film:</strong> ${safeFilmTitle}</div>
                     </div>
                     
                     <div class="form-group">
@@ -1096,7 +1107,7 @@ function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comm
                     </div>
                     
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="submitReport('${filmId}', '${escapeHtml(filmTitle)}', '${reportedUserId}', '${escapeHtml(reportedByName)}', '${escapeHtml(comment)}', ${rating}, ${timestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
+                        <button onclick="submitReport('${filmId}', '${safeFilmTitle}', '${reportedUserId}', '${safeReportedByName}', '${safeComment}', ${rating}, ${safeTimestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
                         <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Batal</button>
                     </div>
                 </div>
@@ -1129,6 +1140,19 @@ async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, c
         return;
     }
     
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        closeReportModal();
+        return;
+    }
+    
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        closeReportModal();
+        return;
+    }
+    
     const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${reason}\n\nLaporan akan ditinjau oleh admin.`);
     if (!confirmed) return;
     
@@ -1143,7 +1167,7 @@ async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, c
                 reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
                 comment,
                 rating,
-                timestamp,
+                timestamp: timestamp,
                 reportReason: reason
             })
         });
