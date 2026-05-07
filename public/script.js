@@ -147,36 +147,54 @@ async function loadData(force = false) {
     const now = Date.now();
     if (!force && now - lastDataLoad < 1000) return;
     try {
+        console.log('Loading data from server...');
         const data = await apiCall('/api/all-data');
-        if (data) {
-            users = data.users || [];
-            admins = data.admins || [];
-            films = (data.films || []).map(film => ({ ...film, id: film._id }));
-            ratings = data.ratings || [];
-            watchlist = data.watchlist || [];
-            userProfiles = data.userProfiles || {};
-            reports = data.reports || [];
-            actors = (data.actors || []).map(a => ({ ...a, id: a._id }));
-            actorRatingsByUser = data.actorRatingsByUser || [];
-            
-            if (currentToken) {
-                const session = await apiCall('/api/session', { headers: { 'Authorization': currentToken } });
-                if (session && session.loggedIn) {
-                    if (session.isAdmin) { isAdminLoggedIn = true; currentUser = null; }
-                    else { currentUser = session.username; isAdminLoggedIn = false; }
-                } else {
-                    currentToken = null;
-                    localStorage.removeItem("idb_token");
-                }
-            }
-            updateUI();
-            updateStats();
-            render();
-            lastDataLoad = now;
+        
+        if (!data) {
+            console.error('No data received from server');
+            showToast("Gagal memuat data dari server!", "error");
+            return;
         }
+        
+        if (data.error) {
+            console.error('Server error:', data.error);
+            showToast("Error server: " + data.message, "error");
+            return;
+        }
+        
+        console.log('Data received:', {
+            films: data.films?.length || 0,
+            ratings: data.ratings?.length || 0,
+            users: data.users?.length || 0
+        });
+        
+        users = data.users || [];
+        admins = data.admins || [];
+        films = (data.films || []).map(film => ({ ...film, id: film._id }));
+        ratings = data.ratings || [];
+        watchlist = data.watchlist || [];
+        userProfiles = data.userProfiles || {};
+        reports = data.reports || [];
+        actors = (data.actors || []).map(a => ({ ...a, id: a._id }));
+        actorRatingsByUser = data.actorRatingsByUser || [];
+        
+        if (currentToken) {
+            const session = await apiCall('/api/session', { headers: { 'Authorization': currentToken } });
+            if (session && session.loggedIn) {
+                if (session.isAdmin) { isAdminLoggedIn = true; currentUser = null; }
+                else { currentUser = session.username; isAdminLoggedIn = false; }
+            } else {
+                currentToken = null;
+                localStorage.removeItem("idb_token");
+            }
+        }
+        updateUI();
+        updateStats();
+        render();
+        lastDataLoad = now;
     } catch (e) {
-        console.error(e);
-        showToast("Gagal memuat data!", "error");
+        console.error("Error in loadData:", e);
+        showToast("Gagal memuat data! Periksa koneksi internet Anda.", "error");
     }
 }
 

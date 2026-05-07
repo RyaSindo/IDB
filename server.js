@@ -103,17 +103,21 @@ const Report = mongoose.model('Report', ReportSchema);
 
 // Helper fungsi untuk emit update rating
 async function emitRatingUpdate(filmId) {
-    const ratings = await Rating.find({ filmId });
-    const total = ratings.length;
-    const avg = total > 0 ? (ratings.reduce((a, b) => a + b.rating, 0) / total).toFixed(1) : "0.0";
-    const film = await Film.findById(filmId);
-    if (film) {
-        io.to(`film_${filmId}`).emit('film-rating-updated', {
-            filmId: filmId.toString(),
-            filmTitle: film.title,
-            newAvg: avg,
-            totalRatings: total
-        });
+    try {
+        const ratings = await Rating.find({ filmId });
+        const total = ratings.length;
+        const avg = total > 0 ? (ratings.reduce((a, b) => a + b.rating, 0) / total).toFixed(1) : "0.0";
+        const film = await Film.findById(filmId);
+        if (film) {
+            io.to(`film_${filmId}`).emit('film-rating-updated', {
+                filmId: filmId.toString(),
+                filmTitle: film.title,
+                newAvg: avg,
+                totalRatings: total
+            });
+        }
+    } catch (err) {
+        console.error('Error in emitRatingUpdate:', err);
     }
 }
 
@@ -132,13 +136,18 @@ let sessions = {};
 // ---- Get all data ----
 app.get('/api/all-data', async (req, res) => {
     try {
-        const films = await Film.find();
-        const ratings = await Rating.find();
-        const watchlist = await Watchlist.find();
-        const actors = await Actor.find();
-        const actorRatings = await ActorRating.find();
-        const users = await User.find();
-        const reports = await Report.find();
+        console.log('Fetching all data...');
+        
+        const [films, ratings, watchlist, actors, actorRatings, users, reports] = await Promise.all([
+            Film.find().catch(e => { console.error('Films error:', e); return []; }),
+            Rating.find().catch(e => { console.error('Ratings error:', e); return []; }),
+            Watchlist.find().catch(e => { console.error('Watchlist error:', e); return []; }),
+            Actor.find().catch(e => { console.error('Actors error:', e); return []; }),
+            ActorRating.find().catch(e => { console.error('ActorRatings error:', e); return []; }),
+            User.find().catch(e => { console.error('Users error:', e); return []; }),
+            Report.find().catch(e => { console.error('Reports error:', e); return []; })
+        ]);
+        
         const userProfiles = {};
         users.forEach(u => {
             userProfiles[u.username] = {
@@ -148,61 +157,93 @@ app.get('/api/all-data', async (req, res) => {
                 top3Films: u.top3Films || []
             };
         });
+        
+        console.log(`Data fetched: ${films.length} films, ${ratings.length} ratings, ${users.length} users`);
+        
         res.json({
             films, ratings, watchlist, actors, actorRatingsByUser: actorRatings,
             users, admins: users.filter(u => u.isAdmin), userProfiles, reports
         });
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Failed to fetch data' });
+        console.error('Error in /api/all-data:', err);
+        res.status(500).json({ error: 'Failed to fetch data', message: err.message });
     }
 });
 
 // ---- Users ----
 app.post('/api/users/register', async (req, res) => {
-    const { username, password, displayName } = req.body;
-    const existing = await User.findOne({ username });
-    if (existing) return res.status(400).json({ success: false, message: 'Username sudah terdaftar!' });
-    const user = new User({ username, password, displayName: displayName || username, isAdmin: false });
-    await user.save();
-    res.json({ success: true, user: { username, displayName: user.displayName } });
+    try {
+        const { username, password, displayName } = req.body;
+        const existing = await User.findOne({ username });
+        if (existing) return res.status(400).json({ success: false, message: 'Username sudah terdaftar!' });
+        const user = new User({ username, password, displayName: displayName || username, isAdmin: false });
+        await user.save();
+        res.json({ success: true, user: { username, displayName: user.displayName } });
+    } catch (err) {
+        console.error('Register error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 app.post('/api/users/login', async (req, res) => {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username, password });
-    if (!user) return res.status(401).json({ success: false, message: 'Username atau password salah!' });
-    const token = Date.now().toString() + Math.random();
-    sessions[token] = { userId: user._id, username: user.username, displayName: user.displayName, isAdmin: user.isAdmin };
-    res.json({ success: true, token, user: { username: user.username, displayName: user.displayName, isAdmin: user.isAdmin } });
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username, password });
+        if (!user) return res.status(401).json({ success: false, message: 'Username atau password salah!' });
+        const token = Date.now().toString() + Math.random();
+        sessions[token] = { userId: user._id, username: user.username, displayName: user.displayName, isAdmin: user.isAdmin };
+        res.json({ success: true, token, user: { username: user.username, displayName: user.displayName, isAdmin: user.isAdmin } });
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 app.post('/api/users/logout', (req, res) => {
-    delete sessions[req.body.token];
-    res.json({ success: true });
+    try {
+        delete sessions[req.body.token];
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false });
+    }
 });
 
 app.get('/api/session', (req, res) => {
-    const token = req.headers.authorization;
-    if (token && sessions[token]) res.json({ loggedIn: true, ...sessions[token] });
-    else res.json({ loggedIn: false });
+    try {
+        const token = req.headers.authorization;
+        if (token && sessions[token]) res.json({ loggedIn: true, ...sessions[token] });
+        else res.json({ loggedIn: false });
+    } catch (err) {
+        res.json({ loggedIn: false });
+    }
 });
 
 // ---- Films ----
-app.get('/api/films', async (req, res) => res.json(await Film.find()));
+app.get('/api/films', async (req, res) => {
+    try {
+        res.json(await Film.find());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/films', async (req, res) => {
-    const { title, year, poster, trailer, synopsis, actors, posterBase64 } = req.body;
-    let posterUrl = poster;
-    if (posterBase64) {
-        const result = await cloudinary.uploader.upload(posterBase64, { folder: 'idb/posters' });
-        posterUrl = result.secure_url;
+    try {
+        const { title, year, poster, trailer, synopsis, actors, posterBase64 } = req.body;
+        let posterUrl = poster;
+        if (posterBase64) {
+            const result = await cloudinary.uploader.upload(posterBase64, { folder: 'idb/posters' });
+            posterUrl = result.secure_url;
+        }
+        const film = new Film({ title, year, posterUrl, trailer, synopsis, actors });
+        await film.save();
+        io.emit('film-added', { film });
+        io.emit('show-toast', { message: `Film baru "${title}" ditambahkan!`, type: 'info' });
+        res.json({ success: true, film });
+    } catch (err) {
+        console.error('Add film error:', err);
+        res.status(500).json({ success: false, message: err.message });
     }
-    const film = new Film({ title, year, posterUrl, trailer, synopsis, actors });
-    await film.save();
-    io.emit('film-added', { film });
-    io.emit('show-toast', { message: `Film baru "${title}" ditambahkan!`, type: 'info' });
-    res.json({ success: true, film });
 });
 
 app.put('/api/films/:id', async (req, res) => {
@@ -259,13 +300,18 @@ app.delete('/api/films/:id', async (req, res) => {
 });
 
 // ---- Ratings ----
-app.get('/api/ratings', async (req, res) => res.json(await Rating.find()));
+app.get('/api/ratings', async (req, res) => {
+    try {
+        res.json(await Rating.find());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/ratings', async (req, res) => {
     try {
         const { filmId, userId, rating, comment } = req.body;
         
-        // Konversi userId dari username ke ObjectId
         let userObjectId;
         const user = await User.findOne({ username: userId });
         if (user) {
@@ -278,10 +324,10 @@ app.post('/api/ratings', async (req, res) => {
             }
         }
 
-        const result = await Rating.findOneAndUpdate(
+        await Rating.findOneAndUpdate(
             { filmId, userId: userObjectId },
             { rating, comment, timestamp: new Date() },
-            { upsert: true, new: true }
+            { upsert: true }
         );
 
         await emitRatingUpdate(filmId);
@@ -295,7 +341,7 @@ app.post('/api/ratings', async (req, res) => {
             timestamp: Date.now()
         });
 
-        res.json({ success: true, rating: result });
+        res.json({ success: true });
     } catch (error) {
         console.error('Error saving rating:', error);
         res.status(500).json({ success: false, message: error.message });
@@ -306,7 +352,6 @@ app.delete('/api/ratings', async (req, res) => {
     try {
         const { filmId, userId } = req.body;
         
-        // Konversi userId dari username ke ObjectId
         let userObjectId;
         const user = await User.findOne({ username: userId });
         if (user) {
@@ -319,14 +364,8 @@ app.delete('/api/ratings', async (req, res) => {
             }
         }
 
-        const deleted = await Rating.deleteOne({ filmId, userId: userObjectId });
-        
-        if (deleted.deletedCount === 0) {
-            return res.status(404).json({ success: false, message: 'Rating tidak ditemukan' });
-        }
-        
+        await Rating.deleteOne({ filmId, userId: userObjectId });
         await emitRatingUpdate(filmId);
-        io.emit('rating-deleted', { filmId, userId: userObjectId });
         
         res.json({ success: true });
     } catch (error) {
@@ -336,115 +375,161 @@ app.delete('/api/ratings', async (req, res) => {
 });
 
 // ---- Watchlist ----
-app.get('/api/watchlist', async (req, res) => res.json(await Watchlist.find()));
+app.get('/api/watchlist', async (req, res) => {
+    try {
+        res.json(await Watchlist.find());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/watchlist/toggle', async (req, res) => {
-    const { userId, filmId } = req.body;
-    let userObjectId;
-    const user = await User.findOne({ username: userId });
-    if (user) userObjectId = user._id;
-    else userObjectId = userId;
+    try {
+        const { userId, filmId } = req.body;
+        let userObjectId;
+        const user = await User.findOne({ username: userId });
+        if (user) userObjectId = user._id;
+        else userObjectId = userId;
 
-    const existing = await Watchlist.findOne({ userId: userObjectId, filmId });
-    let action;
-    if (existing) {
-        await existing.deleteOne();
-        action = 'removed';
-    } else {
-        await Watchlist.create({ userId: userObjectId, filmId });
-        action = 'added';
+        const existing = await Watchlist.findOne({ userId: userObjectId, filmId });
+        let action;
+        if (existing) {
+            await existing.deleteOne();
+            action = 'removed';
+        } else {
+            await Watchlist.create({ userId: userObjectId, filmId });
+            action = 'added';
+        }
+        io.emit('watchlist-updated', { userId: userObjectId, filmId, action });
+        res.json({ success: true, action });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
-    io.emit('watchlist-updated', { userId: userObjectId, filmId, action });
-    res.json({ success: true, action });
 });
 
 // ---- Profiles ----
 app.get('/api/profiles/:userId', async (req, res) => {
-    const user = await User.findOne({ username: req.params.userId });
-    if (!user) return res.json({ displayName: req.params.userId, avatarValue: null, bio: "Pecinta film 🎬", top3Films: [] });
-    res.json({ displayName: user.displayName, avatarValue: user.avatarUrl, bio: user.bio, top3Films: user.top3Films });
+    try {
+        const user = await User.findOne({ username: req.params.userId });
+        if (!user) return res.json({ displayName: req.params.userId, avatarValue: null, bio: "Pecinta film 🎬", top3Films: [] });
+        res.json({ displayName: user.displayName, avatarValue: user.avatarUrl, bio: user.bio, top3Films: user.top3Films });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.put('/api/profiles/:userId', async (req, res) => {
-    const user = await User.findOne({ username: req.params.userId });
-    if (!user) return res.status(404).json({ success: false });
-    const { displayName, avatarValue, bio, top3Films } = req.body;
-    user.displayName = displayName || user.displayName;
-    user.avatarUrl = avatarValue || user.avatarUrl;
-    user.bio = bio || user.bio;
-    user.top3Films = top3Films || [];
-    await user.save();
-    io.emit('profile-updated', { userId: req.params.userId, profile: { displayName: user.displayName, avatarValue: user.avatarUrl, bio: user.bio, top3Films: user.top3Films } });
-    io.emit('show-toast', { message: `Profil ${user.displayName} diperbarui`, type: 'success' });
-    res.json({ success: true });
+    try {
+        const user = await User.findOne({ username: req.params.userId });
+        if (!user) return res.status(404).json({ success: false });
+        const { displayName, avatarValue, bio, top3Films } = req.body;
+        user.displayName = displayName || user.displayName;
+        user.avatarUrl = avatarValue || user.avatarUrl;
+        user.bio = bio || user.bio;
+        user.top3Films = top3Films || [];
+        await user.save();
+        io.emit('profile-updated', { userId: req.params.userId, profile: { displayName: user.displayName, avatarValue: user.avatarUrl, bio: user.bio, top3Films: user.top3Films } });
+        io.emit('show-toast', { message: `Profil ${user.displayName} diperbarui`, type: 'success' });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // ---- Actors ----
-app.get('/api/actors', async (req, res) => res.json(await Actor.find()));
+app.get('/api/actors', async (req, res) => {
+    try {
+        res.json(await Actor.find());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/actors', async (req, res) => {
-    const { name, bio, photo } = req.body;
-    if (await Actor.findOne({ name })) return res.status(400).json({ success: false, message: 'Aktor sudah ada' });
-    let photoUrl = photo;
-    if (photo && photo.startsWith('data:image/')) {
-        const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
-        photoUrl = result.secure_url;
-    } else if (!photoUrl) {
-        photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=667eea&color=fff`;
+    try {
+        const { name, bio, photo } = req.body;
+        if (await Actor.findOne({ name })) return res.status(400).json({ success: false, message: 'Aktor sudah ada' });
+        let photoUrl = photo;
+        if (photo && photo.startsWith('data:image/')) {
+            const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
+            photoUrl = result.secure_url;
+        } else if (!photoUrl) {
+            photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=667eea&color=fff`;
+        }
+        const actor = new Actor({ name, bio: bio || "Aktor berbakat", photoUrl });
+        await actor.save();
+        io.emit('actor-added', { actor });
+        io.emit('show-toast', { message: `Aktor baru "${name}" ditambahkan`, type: 'info' });
+        res.json({ success: true, actor });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
     }
-    const actor = new Actor({ name, bio: bio || "Aktor berbakat", photoUrl });
-    await actor.save();
-    io.emit('actor-added', { actor });
-    io.emit('show-toast', { message: `Aktor baru "${name}" ditambahkan`, type: 'info' });
-    res.json({ success: true, actor });
 });
 
 app.put('/api/actors/:id', async (req, res) => {
-    const { id } = req.params;
-    const { name, bio, photo } = req.body;
-    const old = await Actor.findById(id);
-    if (!old) return res.status(404).json({ success: false });
-    let photoUrl = photo;
-    if (photo && photo.startsWith('data:image/')) {
-        const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
-        photoUrl = result.secure_url;
-    } else if (!photoUrl) photoUrl = old.photoUrl;
-    await Actor.findByIdAndUpdate(id, { name, bio, photoUrl });
-    await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
-    await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
-    io.emit('actor-updated', { actor: { id, name, bio, photoUrl } });
-    io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
-    res.json({ success: true });
+    try {
+        const { id } = req.params;
+        const { name, bio, photo } = req.body;
+        const old = await Actor.findById(id);
+        if (!old) return res.status(404).json({ success: false });
+        let photoUrl = photo;
+        if (photo && photo.startsWith('data:image/')) {
+            const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
+            photoUrl = result.secure_url;
+        } else if (!photoUrl) photoUrl = old.photoUrl;
+        await Actor.findByIdAndUpdate(id, { name, bio, photoUrl });
+        await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
+        await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
+        io.emit('actor-updated', { actor: { id, name, bio, photoUrl } });
+        io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 app.delete('/api/actors/:id', async (req, res) => {
-    const { id } = req.params;
-    const actor = await Actor.findById(id);
-    if (!actor) return res.status(404).json({ success: false });
-    await Actor.findByIdAndDelete(id);
-    await Film.updateMany({ actors: actor.name }, { $pull: { actors: actor.name } });
-    await ActorRating.deleteMany({ actorName: actor.name });
-    io.emit('actor-deleted', { actorId: id, actorName: actor.name });
-    io.emit('show-toast', { message: `Aktor "${actor.name}" dihapus`, type: 'warning' });
-    res.json({ success: true });
+    try {
+        const { id } = req.params;
+        const actor = await Actor.findById(id);
+        if (!actor) return res.status(404).json({ success: false });
+        await Actor.findByIdAndDelete(id);
+        await Film.updateMany({ actors: actor.name }, { $pull: { actors: actor.name } });
+        await ActorRating.deleteMany({ actorName: actor.name });
+        io.emit('actor-deleted', { actorId: id, actorName: actor.name });
+        io.emit('show-toast', { message: `Aktor "${actor.name}" dihapus`, type: 'warning' });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // ---- Actor Ratings ----
-app.get('/api/actor-ratings', async (req, res) => res.json(await ActorRating.find()));
+app.get('/api/actor-ratings', async (req, res) => {
+    try {
+        res.json(await ActorRating.find());
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/actor-ratings', async (req, res) => {
-    const { actorName, userId, rating } = req.body;
-    let userObjectId;
-    const user = await User.findOne({ username: userId });
-    if (user) userObjectId = user._id;
-    else userObjectId = userId;
+    try {
+        const { actorName, userId, rating } = req.body;
+        let userObjectId;
+        const user = await User.findOne({ username: userId });
+        if (user) userObjectId = user._id;
+        else userObjectId = userId;
 
-    await ActorRating.findOneAndUpdate({ actorName, userId: userObjectId }, { rating, timestamp: new Date() }, { upsert: true });
-    const all = await ActorRating.find({ actorName });
-    const total = all.length;
-    const avg = total > 0 ? (all.reduce((a, b) => a + b.rating, 0) / total).toFixed(1) : "0.0";
-    io.emit('actor-rating-updated', { actorName, userId: userObjectId, rating, newAvg: avg, totalRatings: total });
-    res.json({ success: true });
+        await ActorRating.findOneAndUpdate({ actorName, userId: userObjectId }, { rating, timestamp: new Date() }, { upsert: true });
+        const all = await ActorRating.find({ actorName });
+        const total = all.length;
+        const avg = total > 0 ? (all.reduce((a, b) => a + b.rating, 0) / total).toFixed(1) : "0.0";
+        io.emit('actor-rating-updated', { actorName, userId: userObjectId, rating, newAvg: avg, totalRatings: total });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // ---- Reports ----
@@ -462,7 +547,6 @@ app.post('/api/reports', async (req, res) => {
     try {
         const { filmId, filmTitle, reportedUserId, reportedByName, reportedBy, comment, rating, timestamp, reportReason } = req.body;
         
-        // Konversi reportedUserId ke ObjectId
         let reportedUserObjectId;
         const user = await User.findOne({ username: reportedByName });
         if (user) {
@@ -475,7 +559,6 @@ app.post('/api/reports', async (req, res) => {
             }
         }
         
-        // Cek apakah sudah pernah report
         const existing = await Report.findOne({ 
             filmId, 
             reportedUserId: reportedUserObjectId, 
@@ -501,7 +584,6 @@ app.post('/api/reports', async (req, res) => {
         });
         await report.save();
         
-        // Notifikasi ke admin
         io.emit('new-report', { report });
         io.emit('show-toast', { message: `Laporan terkirim! Admin akan segera menindaklanjuti.`, type: 'info' });
         
@@ -538,8 +620,6 @@ app.put('/api/reports/:id', async (req, res) => {
                 message: `Komentar dari ${report.reportedByName} telah dihapus!`, 
                 type: 'success' 
             });
-            
-            io.emit('rating-deleted', { filmId: report.filmId, userId: report.reportedUserId });
         } else {
             io.emit('show-toast', { 
                 message: `Laporan terhadap ${report.reportedByName} ditolak.`, 
@@ -547,7 +627,6 @@ app.put('/api/reports/:id', async (req, res) => {
             });
         }
         
-        // Refresh data untuk semua client
         io.emit('global-refresh');
         
         res.json({ success: true });
@@ -589,13 +668,19 @@ app.use((req, res) => {
 
 // ==================== KONEKSI MONGOOSE ====================
 const mongooseOptions = {
-    serverSelectionTimeoutMS: 5000,
+    serverSelectionTimeoutMS: 10000,
+    socketTimeoutMS: 45000,
     tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
 };
 
+console.log('Connecting to MongoDB...');
 mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
     .then(async () => {
-        console.log('✅ MongoDB connected');
+        console.log('✅ MongoDB connected successfully');
+        
+        // Cek koneksi dengan melakukan query sederhana
+        const dbStatus = await mongoose.connection.db.admin().ping();
+        console.log('✅ MongoDB ping response:', dbStatus);
 
         // Seed data jika kosong
         const userCount = await User.countDocuments();
@@ -640,5 +725,6 @@ mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
     })
     .catch(err => {
         console.error('MongoDB connection error:', err);
+        console.error('Please check your MONGODB_URI environment variable');
         process.exit(1);
     });
