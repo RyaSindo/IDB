@@ -1328,8 +1328,8 @@ initSocket();
 loadData();
 initNav();
 
-// Update real-time setiap 3 detik
+// Update real-time setiap 10 detik
 setInterval(async () => {
     await loadData(true);
-}, 5000);
+}, 10000);
 
