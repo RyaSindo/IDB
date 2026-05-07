@@ -409,7 +409,7 @@ app.use((req, res) => {
 // Opsi koneksi tanpa useNewUrlParser/useUnifiedTopology (sudah default)
 const mongooseOptions = {
     serverSelectionTimeoutMS: 5000,
-    // Untuk development, izinkan sertifikat tidak valid
+    // Hanya untuk development, hapus jika di production dan sertifikat valid
     tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
 };
 
