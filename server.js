@@ -446,24 +446,107 @@ app.post('/api/actor-ratings', async (req, res) => {
 });
 
 // ---- Reports ----
-app.get('/api/reports', async (req, res) => res.json(await Report.find()));
+app.get('/api/reports', async (req, res) => {
+    try {
+        const reports = await Report.find();
+        res.json(reports);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch reports' });
+    }
+});
 
 app.post('/api/reports', async (req, res) => {
-    const report = new Report({ ...req.body, timestamp: new Date(), status: 'pending' });
-    await report.save();
-    res.json({ success: true });
+    try {
+        const { filmId, filmTitle, reportedUserId, reportedByName, reportedBy, comment, rating, timestamp } = req.body;
+        
+        // Cek apakah sudah pernah report
+        const existing = await Report.findOne({ 
+            filmId, 
+            reportedUserId, 
+            reportedBy,
+            status: 'pending' 
+        });
+        
+        if (existing) {
+            return res.status(400).json({ success: false, message: 'Anda sudah melaporkan komentar ini!' });
+        }
+        
+        const report = new Report({ 
+            filmId, 
+            filmTitle, 
+            reportedUserId, 
+            reportedByName, 
+            reportedBy, 
+            comment, 
+            rating, 
+            timestamp: new Date(timestamp),
+            status: 'pending' 
+        });
+        await report.save();
+        
+        // Notifikasi ke admin (socket)
+        io.emit('new-report', { report });
+        io.emit('show-toast', { message: `Laporan terkirim! Admin akan segera menindaklanjuti.`, type: 'info' });
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 app.put('/api/reports/:id', async (req, res) => {
-    const { id } = req.params;
-    const report = await Report.findById(id);
-    if (!report) return res.status(404).json({ success: false });
-    report.status = req.body.status;
-    await report.save();
-    if (req.body.status === 'approved') {
-        await Rating.deleteOne({ filmId: report.filmId, userId: report.reportedUserId });
+    try {
+        const { id } = req.params;
+        const { status } = req.body; // 'approved' atau 'rejected'
+        
+        const report = await Report.findById(id);
+        if (!report) {
+            return res.status(404).json({ success: false, message: 'Report tidak ditemukan' });
+        }
+        
+        report.status = status;
+        await report.save();
+        
+        if (status === 'approved') {
+            // Hapus rating yang dilaporkan
+            await Rating.deleteOne({ 
+                filmId: report.filmId, 
+                userId: report.reportedUserId,
+                timestamp: report.timestamp 
+            });
+            
+            // Emit update rating
+            await emitRatingUpdate(report.filmId);
+            
+            io.emit('show-toast', { 
+                message: `Komentar dari ${report.reportedByName} telah dihapus!`, 
+                type: 'success' 
+            });
+        } else {
+            io.emit('show-toast', { 
+                message: `Laporan terhadap ${report.reportedByName} ditolak.`, 
+                type: 'info' 
+            });
+        }
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, message: err.message });
     }
-    res.json({ success: true });
+});
+
+socket.on('new-report', (data) => {
+    console.log('📢 New report received:', data);
+    // Update reports array
+    reports.push(data.report);
+    if (currentView === 'reports') renderReports();
+    // Optional: show notification hanya untuk admin
+    if (isAdminLoggedIn) {
+        showToast(`Laporan baru dari ${data.report.reportedBy} untuk komentar ${data.report.reportedByName}`, 'warning');
+    }
 });
 
 // ---- Uploads ----

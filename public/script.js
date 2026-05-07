@@ -897,6 +897,29 @@ function openFilmModal(id) {
                     <h3 style="margin:20px 0 10px;"><i class="fas fa-comments"></i> Semua Komentar</h3>
                     <div class="review-list" style="max-height:300px; overflow-y:auto;">
     ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
+        const p = getProfile(r.userId);
+        const canDelete = isAdminLoggedIn;
+        const canReport = (currentUser || isAdminLoggedIn) && currentUser !== r.userId;
+        
+        return `
+            <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px; position:relative;">
+                <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:5px;">
+                    <span class="review-user" onclick="viewProfile('${r.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
+                        <i class="fas fa-user-circle"></i> ${escapeHtml(p.displayName)}
+                    </span>
+                    <span class="review-rating" style="color:#f59e0b;">⭐ ${r.rating}/10</span>
+                </div>
+                <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
+                <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    ${canReport ? `<button class="report-btn" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(p.displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
+                    ${canDelete ? `<button class="admin-delete-comment-btn" onclick="event.stopPropagation(); adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(p.displayName)}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
+</div>
+    ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
         const displayName = getDisplayNameFromObjectId(r.userId);
         return `
             <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;">
@@ -1283,6 +1306,89 @@ function initNav() {
             render();
         };
     });
+}
+
+// ==================== FUNGSI REPORT KOMENTAR ====================
+
+async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        return false;
+    }
+    
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        return false;
+    }
+    
+    const confirmed = confirm(`Laporkan komentar dari "${reportedByName}"?\n\nKomentar: "${comment}"\n\nLaporan akan ditinjau oleh admin.`);
+    if (!confirmed) return false;
+    
+    try {
+        const res = await apiCall('/api/reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                filmId,
+                filmTitle,
+                reportedUserId,
+                reportedByName,
+                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
+                comment,
+                rating,
+                timestamp
+            })
+        });
+        
+        if (res?.success) {
+            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
+            return true;
+        } else {
+            showToast(res?.message || "Gagal mengirim laporan!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error reporting comment:", error);
+        showToast("Gagal mengirim laporan!", "error");
+        return false;
+    }
+}
+
+// ==================== ADMIN DELETE RATING (LANGSUNG) ====================
+
+async function adminDeleteRating(filmId, userId, comment, userName) {
+    if (!isAdminLoggedIn) {
+        showToast("Hanya admin yang dapat menghapus komentar!", "error");
+        return;
+    }
+    
+    const confirmed = confirm(`Hapus komentar dari "${userName}"?\n\nKomentar: "${comment}"\n\nTindakan ini tidak dapat dibatalkan.`);
+    if (!confirmed) return;
+    
+    try {
+        const res = await apiCall('/api/ratings', {
+            method: 'DELETE',
+            body: JSON.stringify({ filmId, userId })
+        });
+        
+        if (res?.success) {
+            showToast(`Komentar dari ${userName} telah dihapus!`, "success");
+            // Refresh modal jika terbuka
+            if (currentFilmId == filmId && document.getElementById('filmModal')) {
+                closeFilmModal();
+                setTimeout(() => openFilmModal(filmId), 500);
+            }
+            render();
+            return true;
+        } else {
+            showToast(res?.message || "Gagal menghapus komentar!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error deleting rating:", error);
+        showToast("Gagal menghapus komentar!", "error");
+        return false;
+    }
 }
 
 // ==================== GLOBAL FUNCTIONS EXPOSED ====================
