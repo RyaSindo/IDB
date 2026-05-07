@@ -96,6 +96,7 @@ const ReportSchema = new mongoose.Schema({
     comment: String,
     rating: Number,
     timestamp: Date,
+    reportReason: { type: String, default: "" }, // Tambahkan ini
     status: { type: String, default: 'pending' }
 });
 const Report = mongoose.model('Report', ReportSchema);
@@ -457,7 +458,7 @@ app.get('/api/reports', async (req, res) => {
 
 app.post('/api/reports', async (req, res) => {
     try {
-        const { filmId, filmTitle, reportedUserId, reportedByName, reportedBy, comment, rating, timestamp } = req.body;
+        const { filmId, filmTitle, reportedUserId, reportedByName, reportedBy, comment, rating, timestamp, reportReason } = req.body;
         
         // Cek apakah sudah pernah report
         const existing = await Report.findOne({ 
@@ -480,6 +481,7 @@ app.post('/api/reports', async (req, res) => {
             comment, 
             rating, 
             timestamp: new Date(timestamp),
+            reportReason: reportReason || "",
             status: 'pending' 
         });
         await report.save();

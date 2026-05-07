@@ -754,7 +754,7 @@ function renderReports() {
     
     let html = `
         <h2>🚩 Laporan Komentar</h2>
-        <div style="margin-bottom:20px; display:flex; gap:10px;">
+        <div style="margin-bottom:20px; display:flex; gap:10px; flex-wrap:wrap;">
             <button onclick="filterReports('pending')" id="filterPending" class="login-btn" style="background:#667eea;">Tertunda (${pending.length})</button>
             <button onclick="filterReports('approved')" id="filterApproved" class="login-btn" style="background:#10b981;">Disetujui (${approved.length})</button>
             <button onclick="filterReports('rejected')" id="filterRejected" class="login-btn" style="background:#ef4444;">Ditolak (${rejected.length})</button>
@@ -776,6 +776,7 @@ function renderReports() {
                     <div>⭐ Rating: ${r.rating}/10</div>
                     <div>👤 Penulis: ${escapeHtml(r.reportedByName)}</div>
                     <div>📢 Dilaporkan oleh: ${escapeHtml(r.reportedBy)}</div>
+                    ${r.reportReason ? `<div>📋 Alasan: <span style="background:#fef3c7; padding:2px 8px; border-radius:20px; font-size:12px;">${escapeHtml(r.reportReason)}</span></div>` : ''}
                     <div>📅 Tanggal: ${new Date(r.timestamp).toLocaleString()}</div>
                     <div>🏷️ Status: <span style="color:${statusColor}; font-weight:bold;">${statusText}</span></div>
                     ${r.status === 'pending' ? `
@@ -939,7 +940,6 @@ function openFilmModal(id) {
                                     <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
                                     <div style="display:flex; gap:8px; margin-top:8px;">
                                         ${canReport ? `<button class="report-btn" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
-                                        ${canDelete ? `<button class="admin-delete-comment-btn" onclick="event.stopPropagation(); adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(displayName)}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
                                     </div>
                                 </div>
                             `;
@@ -1385,6 +1385,151 @@ function initNav() {
     });
 }
 
+// ==================== MODAL REPORT KOMENTAR ====================
+
+function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    // Buat modal popup untuk alasan pelaporan
+    const modalHtml = `
+        <div id="reportModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:2000; justify-content:center; align-items:center;">
+            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
+                <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
+                    <h2 style="color:white;"><i class="fas fa-flag"></i> Laporkan Komentar</h2>
+                    <span class="close-modal" onclick="closeReportModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
+                </div>
+                <div class="modal-body" style="padding:20px;">
+                    <div style="margin-bottom:15px; padding:12px; background:#fef3c7; border-radius:12px;">
+                        <div><strong>👤 Penulis:</strong> ${escapeHtml(reportedByName)}</div>
+                        <div><strong>💬 Komentar:</strong> "${escapeHtml(comment)}"</div>
+                        <div><strong>⭐ Rating:</strong> ${rating}/10</div>
+                        <div><strong>🎬 Film:</strong> ${escapeHtml(filmTitle)}</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-weight:600; margin-bottom:8px; display:block;">Alasan Melaporkan <span style="color:red;">*</span></label>
+                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini...&#10;&#10;Contoh:&#10;- Mengandung kata-kata kasar/penghinaan&#10;- Spam atau promosi tidak relevan&#10;- Informasi yang menyesatkan&#10;- Dll." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-family:inherit; resize:vertical;"></textarea>
+                        <div style="font-size:11px; color:#666; margin-top:5px;">Minimal 5 karakter</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="font-weight:600; margin-bottom:8px; display:block;">Kategori Pelanggaran (Opsional)</label>
+                        <select id="reportCategory" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:12px;">
+                            <option value="">-- Pilih kategori --</option>
+                            <option value="Kata-kata kasar/penghinaan">Kata-kata kasar / penghinaan</option>
+                            <option value="Spam atau promosi">Spam atau promosi tidak relevan</option>
+                            <option value="Informasi menyesatkan">Informasi menyesatkan</option>
+                            <option value="Ujaran kebencian">Ujaran kebencian / SARA</option>
+                            <option value="Pornografi atau konten dewasa">Pornografi atau konten dewasa</option>
+                            <option value="Spoiler tanpa peringatan">Spoiler tanpa peringatan</option>
+                            <option value="Lainnya">Lainnya</option>
+                        </select>
+                    </div>
+                    
+                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
+                        <button onclick="submitReportWithReason('${filmId}', '${escapeHtml(filmTitle)}', '${reportedUserId}', '${escapeHtml(reportedByName)}', '${escapeHtml(comment)}', ${rating}, ${timestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
+                        <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Batal</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.style.overflow = "hidden";
+    
+    // Auto-focus ke textarea
+    setTimeout(() => {
+        const reasonTextarea = document.getElementById('reportReason');
+        if (reasonTextarea) reasonTextarea.focus();
+    }, 100);
+}
+
+function closeReportModal() {
+    const modal = document.getElementById("reportModal");
+    if (modal) modal.remove();
+    document.body.style.overflow = "";
+}
+
+async function submitReportWithReason(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    const reasonTextarea = document.getElementById("reportReason");
+    const reason = reasonTextarea ? reasonTextarea.value.trim() : "";
+    
+    if (!reason || reason.length < 5) {
+        showToast("Harap isi alasan pelaporan (minimal 5 karakter)!", "warning");
+        reasonTextarea?.focus();
+        return;
+    }
+    
+    const categorySelect = document.getElementById("reportCategory");
+    const category = categorySelect ? categorySelect.value : "";
+    
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        closeReportModal();
+        return false;
+    }
+    
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        closeReportModal();
+        return false;
+    }
+    
+    const fullReportMessage = category 
+        ? `[${category}] ${reason}` 
+        : reason;
+    
+    const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${fullReportMessage}\n\nLaporan akan ditinjau oleh admin.`);
+    if (!confirmed) return false;
+    
+    try {
+        const res = await apiCall('/api/reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                filmId,
+                filmTitle,
+                reportedUserId,
+                reportedByName,
+                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
+                comment,
+                rating,
+                timestamp,
+                reportReason: fullReportMessage
+            })
+        });
+        
+        if (res?.success) {
+            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
+            closeReportModal();
+            return true;
+        } else {
+            showToast(res?.message || "Gagal mengirim laporan!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error reporting comment:", error);
+        showToast("Gagal mengirim laporan!", "error");
+        return false;
+    }
+}
+
+// Update fungsi reportComment yang lama menjadi memanggil modal
+async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        return false;
+    }
+    
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        return false;
+    }
+    
+    // Tampilkan modal alasan pelaporan
+    showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp);
+}
+
 // ==================== GLOBAL FUNCTIONS EXPOSED ====================
 window.doLogin = doLogin;
 window.doRegister = doRegister;
@@ -1425,6 +1570,9 @@ window.clearActorSearch = clearActorSearch;
 window.filterReports = filterReports;
 window.reportComment = reportComment;
 window.adminDeleteRating = adminDeleteRating;
+window.closeReportModal = closeReportModal;
+window.submitReportWithReason = submitReportWithReason;
+window.showReportModal = showReportModal;
 
 // ==================== START APP ====================
 initSocket();
