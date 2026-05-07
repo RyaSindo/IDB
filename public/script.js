@@ -9,38 +9,43 @@ let currentFilmId = null;
 let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
-let searchDebounceTimer = null;
-let actorSearchDebounceTimer = null;
+let searchTimeout = null; // Untuk debounce search
 
-// ======================= SOCKET.IO REAL-TIME (Tanpa Notifikasi) =======================
+// ======================= SOCKET.IO REAL-TIME =======================
 function initSocket() {
     socket = io({ transports: ['polling'] });
     
     socket.on('connect', () => {
         console.log('✅ Real-time connected');
+        showRealtimeBadge();
     });
     
     socket.on('film-rating-updated', (data) => {
         console.log('📊 Film rating updated', data);
         if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
         if (currentFilmId == data.filmId) updateModalRating(data);
+        showRealtimeNotification(`⭐ Rating "${data.filmTitle}" diperbarui! Rata-rata: ${data.newAvg}/10`, 'info');
     });
     
     socket.on('actor-added', (data) => {
         console.log('⭐ Actor added:', data.actor);
+        showRealtimeNotification(`Aktor baru: ${data.actor.name}`, 'success');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-updated', (data) => {
         console.log('📝 Actor updated:', data.actor);
+        showRealtimeNotification(`Aktor "${data.actor.name}" diperbarui`, 'info');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-deleted', (data) => {
         console.log('🗑️ Actor deleted:', data.actorName);
+        showRealtimeNotification(`Aktor "${data.actorName}" dihapus`, 'warning');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-rating-updated', (data) => {
         console.log('⭐ Actor rating updated', data);
         if (currentView === 'topactors') refreshCurrentView();
+        showRealtimeNotification(`⭐ Rating ${data.actorName} diperbarui! Rata-rata: ${data.newAvg}/5`, 'success');
     });
     
     socket.on('new-comment', (data) => {
@@ -48,10 +53,12 @@ function initSocket() {
         if (currentFilmId == data.filmId && document.getElementById('filmModal')) {
             addCommentToUI(data);
         }
+        showRealtimeNotification(`💬 Komentar baru dari ${data.displayName}`, 'info');
     });
     
     socket.on('data-updated', (data) => {
         console.log('🔄 Database updated');
+        showRealtimeNotification('Data diperbarui oleh pengguna lain', 'info');
         refreshCurrentView();
     });
     socket.on('global-refresh', () => {
@@ -61,24 +68,29 @@ function initSocket() {
     
     socket.on('film-added', (data) => {
         console.log('🎬 Film added:', data.film);
+        showRealtimeNotification(`Film baru: ${data.film.title}`, 'success');
         refreshCurrentView();
     });
     socket.on('film-updated', (data) => {
         console.log('📝 Film updated:', data.film);
+        showRealtimeNotification(`Film "${data.film.title}" diperbarui`, 'info');
         refreshCurrentView();
     });
     socket.on('film-deleted', (data) => {
         console.log('🗑️ Film deleted:', data.filmTitle);
+        showRealtimeNotification(`Film "${data.filmTitle}" dihapus`, 'warning');
         refreshCurrentView();
     });
     
     socket.on('watchlist-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
+            showRealtimeNotification(data.action === 'added' ? 'Film ditambahkan ke watchlist' : 'Film dihapus dari watchlist', 'info');
             if (currentView === 'watchlist') refreshCurrentView();
         }
     });
     socket.on('profile-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
+            showRealtimeNotification('Profil Anda diperbarui', 'success');
             updateUI();
         }
         if (currentView === 'profile') refreshCurrentView();
@@ -90,24 +102,20 @@ function initSocket() {
     
     socket.on('disconnect', (reason) => {
         console.log('❌ Real-time disconnected:', reason);
+        const badge = document.querySelector('.realtime-badge');
+        if (badge) badge.remove();
+        showRealtimeNotification('Koneksi real-time terputus, mencoba menyambung...', 'warning');
     });
     socket.on('reconnect', () => {
         console.log('✅ Real-time reconnected');
+        showRealtimeBadge();
+        showRealtimeNotification('Koneksi real-time tersambung kembali!', 'success');
         refreshCurrentView();
     });
 }
 
 async function refreshCurrentView() {
-    // Simpan state search sebelum refresh
-    const currentSearchQuery = searchQuery;
-    const currentActorSearchQuery = actorSearchQuery;
-    
     await loadData(true);
-    
-    // Kembalikan state search setelah refresh
-    searchQuery = currentSearchQuery;
-    actorSearchQuery = currentActorSearchQuery;
-    
     render();
 }
 
@@ -118,6 +126,35 @@ function updateModalRating(data) {
         avgEl.style.backgroundColor = '#fef3c7';
         setTimeout(() => { if (avgEl) avgEl.style.backgroundColor = ''; }, 500);
     }
+}
+
+function showRealtimeNotification(message, type = 'info') {
+    const oldNotif = document.querySelector('.realtime-notification');
+    if (oldNotif) oldNotif.remove();
+    const notification = document.createElement('div');
+    notification.className = `realtime-notification ${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas ${type === 'success' ? 'fa-check-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle')}"></i>
+            <span>${message}</span>
+        </div>
+        <div class="notification-progress"></div>
+    `;
+    document.body.appendChild(notification);
+    setTimeout(() => notification.classList.add('show'), 10);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+
+function showRealtimeBadge() {
+    if (document.querySelector('.realtime-badge')) return;
+    const badge = document.createElement('div');
+    badge.className = 'realtime-badge online';
+    badge.innerHTML = '<i class="fas fa-sync-alt fa-fw fa-spin"></i> Live Updates <span class="status-dot"></span>';
+    badge.onclick = () => showRealtimeNotification('Koneksi real-time aktif!', 'success');
+    document.body.appendChild(badge);
 }
 
 // ======================= API HELPERS =======================
@@ -164,6 +201,7 @@ async function loadData(force = false) {
             }
             updateUI();
             updateStats();
+            render();
             lastDataLoad = now;
         }
     } catch (e) {
@@ -225,47 +263,6 @@ function isInWatchlist(uid, fid) {
     const uidStr = uid.toString();
     const fidStr = fid.toString();
     return watchlist.some(w => w.userId && w.userId.toString() === uidStr && w.filmId && w.filmId.toString() === fidStr);
-}
-
-// ======================= SEARCH FUNCTIONS (Like YouTube) =======================
-function initSearchEvents() {
-    // Search film dengan debounce (seperti YouTube)
-    const searchInput = document.getElementById('searchInput');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = setTimeout(() => {
-                searchQuery = e.target.value;
-                renderBeranda();
-            }, 300); // Delay 300ms setelah selesai mengetik
-        });
-    }
-    
-    // Search actor dengan debounce
-    const actorSearch = document.getElementById('actorSearch');
-    if (actorSearch) {
-        actorSearch.addEventListener('input', (e) => {
-            if (actorSearchDebounceTimer) clearTimeout(actorSearchDebounceTimer);
-            actorSearchDebounceTimer = setTimeout(() => {
-                actorSearchQuery = e.target.value;
-                renderTopActors();
-            }, 300);
-        });
-    }
-}
-
-function clearSearch() { 
-    searchQuery = ""; 
-    const searchInput = document.getElementById("searchInput");
-    if (searchInput) searchInput.value = "";
-    renderBeranda(); 
-}
-
-function clearActorSearch() {
-    actorSearchQuery = "";
-    const actorSearch = document.getElementById("actorSearch");
-    if (actorSearch) actorSearch.value = "";
-    renderTopActors();
 }
 
 // ======================= AUTH =======================
@@ -434,6 +431,36 @@ async function saveProfile() {
 }
 
 // ==================== RENDER FUNCTIONS ====================
+function performSearch() {
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchQuery = searchInput.value;
+        renderBeranda();
+    }
+}
+
+function clearSearch() { 
+    searchQuery = ""; 
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) searchInput.value = "";
+    renderBeranda(); 
+}
+
+function performActorSearch() {
+    const actorSearch = document.getElementById("actorSearch");
+    if (actorSearch) {
+        actorSearchQuery = actorSearch.value;
+        renderTopActors();
+    }
+}
+
+function clearActorSearch() {
+    actorSearchQuery = "";
+    const actorSearch = document.getElementById("actorSearch");
+    if (actorSearch) actorSearch.value = "";
+    renderTopActors();
+}
+
 function renderBeranda() {
     let filtered = films;
     if (searchQuery) {
@@ -469,7 +496,8 @@ function renderBeranda() {
         <h2>🎬 Semua Film</h2>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Reset</button>
+            <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
+            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
         </div>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
             ${filtered.map(f => {
@@ -495,7 +523,6 @@ function renderBeranda() {
         ${filtered.length === 0 ? '<p style="text-align:center;padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
     `;
     document.getElementById("mainContent").innerHTML = html;
-    initSearchEvents();
 }
 
 function renderTopRating() {
@@ -558,10 +585,11 @@ function renderTopActors() {
     
     let html = `
         <h2>⭐ Top Aktor</h2>
-        <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas</p>
+        <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas (Real-time)</p>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="clearActorSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Reset</button>
+            <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
+            <button onclick="clearActorSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
             ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Tambah Aktor</button>` : ''}
         </div>
         <div class="actors-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:16px;">
@@ -596,7 +624,6 @@ function renderTopActors() {
     });
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
-    initSearchEvents();
 }
 
 function renderWatchlist() {
@@ -678,7 +705,7 @@ function renderAbout() {
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
                 <h2><i class="fas fa-info-circle"></i> TENTANG IDB</h2>
-                <p><strong>IDB (Indie Database Film)</strong> adalah platform rating film independen dengan fitur rating dan komentar.</p>
+                <p><strong>IDB (Indie Database Film)</strong> adalah platform rating film independen dengan fitur real-time update rating dan komentar.</p>
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
                 <h2><i class="fas fa-star"></i> FITUR UNGGULAN</h2>
@@ -687,6 +714,7 @@ function renderAbout() {
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-user" style="font-size:40px;color:#667eea;"></i><h3>Rating Aktor</h3><p>1-5 bintang</p></div>
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-bookmark" style="font-size:40px;color:#667eea;"></i><h3>Watchlist</h3><p>Simpan film favorit</p></div>
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-trophy" style="font-size:40px;color:#667eea;"></i><h3>Top Rating</h3><p>Peringkat film terbaik</p></div>
+                    <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-sync-alt" style="font-size:40px;color:#667eea;"></i><h3>Real-time Update</h3><p>Rating & komentar update langsung</p></div>
                 </div>
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
@@ -1209,10 +1237,12 @@ window.openSettingModal = openSettingModal;
 window.closeSettingModal = closeSettingModal;
 window.saveProfile = saveProfile;
 window.clearSearch = clearSearch;
-window.clearActorSearch = clearActorSearch;
 window.viewProfile = viewProfile;
 window.resolveReport = resolveReport;
 window.changeView = changeView;
+window.performSearch = performSearch;
+window.performActorSearch = performActorSearch;
+window.clearActorSearch = clearActorSearch;
 
 // ==================== START APP ====================
 initSocket();
