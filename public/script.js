@@ -10,6 +10,7 @@ let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
 let searchTimeout = null; // Untuk debounce search
+let refreshInterval = null; // Untuk menyimpan interval refresh
 
 // ======================= SOCKET.IO REAL-TIME =======================
 function initSocket() {
@@ -1249,6 +1250,7 @@ initSocket();
 loadData();
 initNav();
 
+// Update real-time setiap 5 detik (dari 3 detik menjadi 5 detik)
 setInterval(async () => {
     await loadData(true);
-}, 3000);
+}, 5000); // Diubah dari 3000 menjadi 5000 (5 detik)
