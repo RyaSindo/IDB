@@ -1327,9 +1327,3 @@ window.clearActorSearch = clearActorSearch;
 initSocket();
 loadData();
 initNav();
-
-// Update real-time setiap 10 detik
-setInterval(async () => {
-    await loadData(true);
-}, 10000);
-
