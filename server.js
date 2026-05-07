@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static('public'));
+app.use(express.static('public')); // Hanya sekali
 
 app.get('/health', (req, res) => res.send('OK'));
 
@@ -27,12 +27,12 @@ cloudinary.config({
 // ==================== SOCKET.IO ====================
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { 
+    cors: {
         origin: "*",
-        credentials: true 
+        credentials: true
     },
     transports: ['websocket', 'polling'],
-    allowEIO3: true  // Tambahkan ini
+    allowEIO3: true
 });
 
 // ==================== SCHEMAS ====================
@@ -132,7 +132,7 @@ let sessions = {};
 
 // ==================== API ROUTES ====================
 
-// ---- Get all data (replaces /api/data) ----
+// ---- Get all data ----
 app.get('/api/all-data', async (req, res) => {
     try {
         const films = await Film.find();
@@ -405,23 +405,26 @@ app.post('/api/upload-profile', async (req, res) => {
 });
 
 // ---- Serve frontend ----
-app.use(express.static('public'));
+// app.use(express.static('public')) sudah di atas
 app.use((req, res) => {
     res.sendFile('index.html', { root: 'public' });
 });
 
 // ==================== MONGOOSE CONNECTION & START SERVER ====================
-mongoose.connect(process.env.MONGODB_URI, {
+// Opsi koneksi untuk mengatasi error sertifikat (development only)
+const mongooseOptions = {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    tls: true,
-    tlsAllowInvalidCertificates: true,   // Hanya untuk development!
-    serverSelectionTimeoutMS: 5000
-})
+    serverSelectionTimeoutMS: 5000,
+    // Hanya untuk development, hapus atau set false untuk production
+    tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
+};
+
+mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
     .then(async () => {
         console.log('✅ MongoDB connected');
-        
-        // Seed data (panggil model yang sudah didefinisikan)
+
+        // Seed data
         const userCount = await User.countDocuments();
         if (userCount === 0) {
             console.log('🌱 Seeding default users...');
@@ -431,7 +434,7 @@ mongoose.connect(process.env.MONGODB_URI, {
                 { username: "user2", password: "user2123", displayName: "User 2", isAdmin: false, bio: "Pecinta film 🎬", createdAt: new Date() }
             ]);
         }
-        
+
         const filmCount = await Film.countDocuments();
         if (filmCount === 0) {
             console.log('🌱 Seeding default films...');
@@ -442,7 +445,7 @@ mongoose.connect(process.env.MONGODB_URI, {
                 { title: "Spider-Man: Into the Spider-Verse", year: 2018, posterUrl: "https://image.tmdb.org/t/p/w500/iiZZdoQBEYBv6id8su7ImL0oCbD.jpg", trailer: "https://www.youtube.com/watch?v=g4Hbz2jLxvQ", synopsis: "Remaja Miles Morales menjadi Spider-Man di dimensinya.", actors: [], createdAt: new Date() }
             ]);
         }
-        
+
         const actorCount = await Actor.countDocuments();
         if (actorCount === 0) {
             console.log('🌱 Seeding default actors...');
@@ -454,16 +457,16 @@ mongoose.connect(process.env.MONGODB_URI, {
                 { name: "Zendaya", bio: "Aktris dan penyanyi Amerika.", photoUrl: "https://ui-avatars.com/api/?name=Zendaya&background=667eea&color=fff", createdAt: new Date() }
             ]);
         }
-        
+
         console.log('✅ Seeding complete');
-        
-        // START SERVER - HANYA SEKALI di sini
+
+        // START SERVER
         server.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
             console.log(`✅ Socket.IO & MongoDB ready`);
         });
     })
     .catch(err => {
-        console.error('MongoDB error:', err);
+        console.error('MongoDB connection error:', err);
         process.exit(1);
     });
