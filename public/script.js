@@ -476,8 +476,8 @@ function renderBeranda() {
                             </div>
                             ${isAdminLoggedIn ? `
                                 <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
-                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
-                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
+                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="fa fa-pencil-square-o"></i></button>
+                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="fa fa-trash"></i></button>
                                 </div>
                             ` : ''}
                         </div>
