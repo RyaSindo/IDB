@@ -9,10 +9,8 @@ let currentFilmId = null;
 let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
-let searchTimeout = null; // Untuk debounce search
-let refreshInterval = null; // Untuk menyimpan interval refresh
 
-// ======================= SOCKET.IO REAL-TIME (Tanpa Notifikasi) =======================
+// ======================= SOCKET.IO REAL-TIME =======================
 function initSocket() {
     socket = io({ transports: ['polling'] });
     
@@ -82,6 +80,15 @@ function initSocket() {
             updateUI();
         }
         if (currentView === 'profile') refreshCurrentView();
+    });
+    
+    socket.on('new-report', (data) => {
+        console.log('📢 New report received:', data);
+        reports.push(data.report);
+        if (currentView === 'reports' && isAdminLoggedIn) renderReports();
+        if (isAdminLoggedIn) {
+            showToast(`Laporan baru dari ${data.report.reportedBy} untuk komentar ${data.report.reportedByName}`, 'warning');
+        }
     });
     
     socket.on('show-toast', (data) => {
@@ -182,18 +189,6 @@ function getProfile(id) {
     return userProfiles[id];
 }
 
-// ==================== HELPER KONVERSI OBJECTID KE USERNAME ====================
-
-// Mendapatkan username dari ObjectId user
-function getUsernameFromObjectId(userId) {
-    if (!userId) return 'Unknown';
-    const user = users.find(u => u._id === userId || u._id.toString() === userId.toString());
-    if (user) return user.username;
-    if (userId === 'admin' || userId.toString() === 'admin') return 'admin';
-    return 'Unknown';
-}
-
-// Mendapatkan displayName dari ObjectId user
 function getDisplayNameFromObjectId(userId) {
     if (!userId) return 'Unknown';
     const user = users.find(u => u._id === userId || u._id.toString() === userId.toString());
@@ -352,11 +347,6 @@ async function addRating(fid, uid, rating, comment) {
         return false;
     }
 }
-async function deleteRating(fid, uid) {
-    const res = await apiCall('/api/ratings', { method: 'DELETE', body: JSON.stringify({ filmId: fid, userId: uid }) });
-    if (res?.success) { await loadData(true); showToast("Rating dihapus!", "info"); }
-    else showToast("Gagal menghapus rating!", "error");
-}
 
 // ==================== ACTORS ====================
 async function addNewActor() {
@@ -369,6 +359,7 @@ async function addNewActor() {
     if (res?.success) { await loadData(true); closeAddActorModal(); showToast(`Aktor "${name}" ditambahkan!`, "success"); render(); }
     else showToast(res?.message || "Gagal menambah aktor!", "error");
 }
+
 async function updateActor() {
     if (!isAdminLoggedIn) return;
     const id = document.getElementById("editActorId")?.value;
@@ -379,6 +370,7 @@ async function updateActor() {
     if (res?.success) { await loadData(true); closeEditActorModal(); showToast(`Aktor "${name}" diperbarui!`, "success"); render(); }
     else showToast("Gagal update aktor!", "error");
 }
+
 async function adminDeleteActor(actorName) {
     if (!isAdminLoggedIn) return;
     if (!confirm(`Hapus aktor "${actorName}"?`)) return;
@@ -388,6 +380,7 @@ async function adminDeleteActor(actorName) {
     if (res?.success) { await loadData(true); showToast(`Aktor "${actorName}" dihapus!`, "success"); render(); }
     else showToast("Gagal menghapus aktor!", "error");
 }
+
 async function rateActor(actorName, rating) {
     if (!currentUser && !isAdminLoggedIn) { showToast("Login dulu!", "error"); showAuthModal(); return; }
     const userId = isAdminLoggedIn ? "admin" : currentUser;
@@ -476,8 +469,8 @@ function renderBeranda() {
                             </div>
                             ${isAdminLoggedIn ? `
                                 <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
-                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="fa fa-pencil-square-o"></i></button>
-                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;"><i class="fa fa-trash"></i></button>
+                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
+                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
                                 </div>
                             ` : ''}
                         </div>
@@ -517,15 +510,11 @@ function renderBeranda() {
     `;
     document.getElementById("mainContent").innerHTML = html;
     
-    // ==================== ATTACH EVENT LISTENER UNTUK EDIT & DELETE ====================
     if (isAdminLoggedIn) {
-        // Event listener untuk tombol Edit
         document.querySelectorAll('.admin-edit-card-btn').forEach(btn => {
             btn.removeEventListener('click', handleEditClick);
             btn.addEventListener('click', handleEditClick);
         });
-        
-        // Event listener untuk tombol Delete
         document.querySelectorAll('.admin-delete-card-btn').forEach(btn => {
             btn.removeEventListener('click', handleDeleteClick);
             btn.addEventListener('click', handleDeleteClick);
@@ -533,21 +522,16 @@ function renderBeranda() {
     }
 }
 
-// Handler function untuk Edit
 function handleEditClick(event) {
     event.stopPropagation();
     const filmId = this.getAttribute('data-film-id');
-    const filmTitle = this.getAttribute('data-film-title');
-    console.log('Edit film:', filmId, filmTitle);
     openEditFilmModal(filmId);
 }
 
-// Handler function untuk Delete
 function handleDeleteClick(event) {
     event.stopPropagation();
     const filmId = this.getAttribute('data-film-id');
     const filmTitle = this.getAttribute('data-film-title');
-    console.log('Delete film:', filmId, filmTitle);
     if (confirm(`Apakah Anda yakin ingin menghapus film "${filmTitle}"?`)) {
         adminDeleteFilm(filmId);
     }
@@ -696,12 +680,8 @@ function renderProfile() {
 
 function viewProfile(identifier) {
     let uid = identifier;
-    
-    // Jika identifier adalah ObjectId, cari username-nya
     const user = users.find(u => u._id === identifier || u._id.toString() === identifier.toString());
-    if (user) {
-        uid = user.username;
-    }
+    if (user) uid = user.username;
     
     const prof = getProfile(uid);
     const userRatings = ratings.filter(r => {
@@ -709,7 +689,6 @@ function viewProfile(identifier) {
         const targetUid = uid.toString();
         return ratingUserId === targetUid || r.userId === uid;
     });
-    
     const avatar = prof.avatarValue ? `<img src="${prof.avatarValue}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;">` : `<i class="fas fa-user-circle" style="font-size:70px;"></i>`;
     
     let html = `
@@ -768,24 +747,75 @@ function renderAbout() {
 
 function renderReports() {
     if (!isAdminLoggedIn) { render(); return; }
+    
     const pending = reports.filter(r => r.status === 'pending');
-    let html = `<h2>🚩 Laporan Komentar</h2><h3>Tertunda (${pending.length})</h3>`;
-    if (pending.length === 0) {
-        html += `<p>Tidak ada laporan tertunda.</p>`;
+    const approved = reports.filter(r => r.status === 'approved');
+    const rejected = reports.filter(r => r.status === 'rejected');
+    
+    let html = `
+        <h2>🚩 Laporan Komentar</h2>
+        <div style="margin-bottom:20px; display:flex; gap:10px;">
+            <button onclick="filterReports('pending')" id="filterPending" class="login-btn" style="background:#667eea;">Tertunda (${pending.length})</button>
+            <button onclick="filterReports('approved')" id="filterApproved" class="login-btn" style="background:#10b981;">Disetujui (${approved.length})</button>
+            <button onclick="filterReports('rejected')" id="filterRejected" class="login-btn" style="background:#ef4444;">Ditolak (${rejected.length})</button>
+        </div>
+        <div id="reportsList">
+    `;
+    
+    if (pending.length === 0 && approved.length === 0 && rejected.length === 0) {
+        html += `<p>Tidak ada laporan.</p>`;
     } else {
-        pending.forEach(r => {
+        [...pending, ...approved, ...rejected].forEach(r => {
+            const statusColor = r.status === 'pending' ? '#f59e0b' : (r.status === 'approved' ? '#10b981' : '#ef4444');
+            const statusText = r.status === 'pending' ? 'Tertunda' : (r.status === 'approved' ? 'Disetujui (Komentar dihapus)' : 'Ditolak');
+            
             html += `
-                <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;">
-                    <div><strong>🎬 ${escapeHtml(r.filmTitle)}</strong><br>💬 "${escapeHtml(r.comment)}"<br>⭐ ${r.rating}/10<br>👤 Dari: ${escapeHtml(r.reportedByName)}<br>📢 Pelapor: ${escapeHtml(r.reportedBy)}</div>
-                    <div style="margin-top:10px;">
-                        <button onclick="resolveReport(${r.id},'approve')" class="modal-btn modal-btn-primary" style="background:#10b981; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer;">✅ Hapus Komentar</button>
-                        <button onclick="resolveReport(${r.id},'reject')" class="modal-btn modal-btn-secondary" style="background:#ef4444; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer; margin-left:8px;">❌ Tolak Laporan</button>
-                    </div>
+                <div class="review-item report-item" data-status="${r.status}" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px; border-left: 4px solid ${statusColor};">
+                    <div><strong>🎬 ${escapeHtml(r.filmTitle)}</strong></div>
+                    <div>💬 Komentar: "${escapeHtml(r.comment)}"</div>
+                    <div>⭐ Rating: ${r.rating}/10</div>
+                    <div>👤 Penulis: ${escapeHtml(r.reportedByName)}</div>
+                    <div>📢 Dilaporkan oleh: ${escapeHtml(r.reportedBy)}</div>
+                    <div>📅 Tanggal: ${new Date(r.timestamp).toLocaleString()}</div>
+                    <div>🏷️ Status: <span style="color:${statusColor}; font-weight:bold;">${statusText}</span></div>
+                    ${r.status === 'pending' ? `
+                        <div style="margin-top:10px; display:flex; gap:10px;">
+                            <button onclick="resolveReport('${r._id}', 'approve')" class="modal-btn modal-btn-primary" style="background:#10b981; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer;">✅ Hapus Komentar</button>
+                            <button onclick="resolveReport('${r._id}', 'reject')" class="modal-btn modal-btn-secondary" style="background:#ef4444; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer;">❌ Tolak Laporan</button>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         });
     }
+    
+    html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
+    
+    filterReports('pending');
+}
+
+let currentReportFilter = 'pending';
+
+function filterReports(status) {
+    currentReportFilter = status;
+    const items = document.querySelectorAll('.report-item');
+    items.forEach(item => {
+        if (item.getAttribute('data-status') === status) {
+            item.style.display = 'block';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    const btns = ['filterPending', 'filterApproved', 'filterRejected'];
+    btns.forEach(btnId => {
+        const btn = document.getElementById(btnId);
+        if (btn) btn.style.opacity = '0.6';
+    });
+    const activeBtn = status === 'pending' ? 'filterPending' : (status === 'approved' ? 'filterApproved' : 'filterRejected');
+    const activeBtnEl = document.getElementById(activeBtn);
+    if (activeBtnEl) activeBtnEl.style.opacity = '1';
 }
 
 async function resolveReport(id, action) {
@@ -844,9 +874,6 @@ function openFilmModal(id) {
     const userRating = uid ? getUserRating(id, uid) : null;
     const inWatchlist = uid ? isInWatchlist(uid, id) : false;
     
-    console.log('User rating:', userRating);
-    
-    // Set currentRating dari userRating jika ada
     if (userRating) {
         currentRating = userRating.rating;
     } else {
@@ -896,45 +923,28 @@ function openFilmModal(id) {
                     
                     <h3 style="margin:20px 0 10px;"><i class="fas fa-comments"></i> Semua Komentar</h3>
                     <div class="review-list" style="max-height:300px; overflow-y:auto;">
-    ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
-        const p = getProfile(r.userId);
-        const canDelete = isAdminLoggedIn;
-        const canReport = (currentUser || isAdminLoggedIn) && currentUser !== r.userId;
-        
-        return `
-            <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px; position:relative;">
-                <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:5px;">
-                    <span class="review-user" onclick="viewProfile('${r.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
-                        <i class="fas fa-user-circle"></i> ${escapeHtml(p.displayName)}
-                    </span>
-                    <span class="review-rating" style="color:#f59e0b;">⭐ ${r.rating}/10</span>
-                </div>
-                <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
-                <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
-                <div style="display:flex; gap:8px; margin-top:8px;">
-                    ${canReport ? `<button class="report-btn" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(p.displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
-                    ${canDelete ? `<button class="admin-delete-comment-btn" onclick="event.stopPropagation(); adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(p.displayName)}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
-                </div>
-            </div>
-        `;
-    }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
-</div>
-    ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
-        const displayName = getDisplayNameFromObjectId(r.userId);
-        return `
-            <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;">
-                <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:5px;">
-                    <span class="review-user" onclick="viewProfile('${r.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
-                        <i class="fas fa-user-circle"></i> ${escapeHtml(displayName)}
-                    </span>
-                    <span class="review-rating" style="color:#f59e0b;">⭐ ${r.rating}/10</span>
-                </div>
-                <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
-                <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
-            </div>
-        `;
-    }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
-</div>
+                        ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
+                            const displayName = getDisplayNameFromObjectId(r.userId);
+                            const canDelete = isAdminLoggedIn;
+                            const canReport = (currentUser || isAdminLoggedIn) && currentUser !== displayName;
+                            return `
+                                <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px; position:relative;">
+                                    <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:5px;">
+                                        <span class="review-user" onclick="viewProfile('${r.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
+                                            <i class="fas fa-user-circle"></i> ${escapeHtml(displayName)}
+                                        </span>
+                                        <span class="review-rating" style="color:#f59e0b;">⭐ ${r.rating}/10</span>
+                                    </div>
+                                    <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
+                                    <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
+                                    <div style="display:flex; gap:8px; margin-top:8px;">
+                                        ${canReport ? `<button class="report-btn" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
+                                        ${canDelete ? `<button class="admin-delete-comment-btn" onclick="event.stopPropagation(); adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(displayName)}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
+                    </div>
                 </div>
             </div>
         </div>
@@ -958,10 +968,8 @@ function openFilmModal(id) {
                         ss.style.color = "#cbd5e0";
                     }
                 });
-                console.log('Rating dipilih:', currentRating);
             };
         });
-        console.log('Current rating:', currentRating);
     }
 }
 
@@ -987,18 +995,14 @@ async function submitRating(id) {
     const comment = commentInput ? commentInput.value.trim() : "";
     const uid = isAdminLoggedIn ? "admin" : currentUser;
     
-    console.log('Submit rating:', { id, uid, rating, comment });
-    
     const success = await addRating(id, uid, rating, comment);
     if (success) {
         closeFilmModal();
-        // Tunggu sebentar sebelum membuka modal lagi agar data sudah terupdate
         setTimeout(() => {
             openFilmModal(id);
         }, 500);
         render();
     }
-
 }
 
 async function deleteRatingFilm(id) {
@@ -1055,6 +1059,79 @@ function addCommentToUI(comment) {
     }, 1000);
 }
 
+async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        return false;
+    }
+    
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        return false;
+    }
+    
+    const confirmed = confirm(`Laporkan komentar dari "${reportedByName}"?\n\nKomentar: "${comment}"\n\nLaporan akan ditinjau oleh admin.`);
+    if (!confirmed) return false;
+    
+    try {
+        const res = await apiCall('/api/reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                filmId, filmTitle, reportedUserId, reportedByName,
+                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
+                comment, rating, timestamp
+            })
+        });
+        
+        if (res?.success) {
+            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
+            return true;
+        } else {
+            showToast(res?.message || "Gagal mengirim laporan!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error reporting comment:", error);
+        showToast("Gagal mengirim laporan!", "error");
+        return false;
+    }
+}
+
+async function adminDeleteRating(filmId, userId, comment, userName) {
+    if (!isAdminLoggedIn) {
+        showToast("Hanya admin yang dapat menghapus komentar!", "error");
+        return;
+    }
+    
+    const confirmed = confirm(`Hapus komentar dari "${userName}"?\n\nKomentar: "${comment}"\n\nTindakan ini tidak dapat dibatalkan.`);
+    if (!confirmed) return;
+    
+    try {
+        const res = await apiCall('/api/ratings', {
+            method: 'DELETE',
+            body: JSON.stringify({ filmId, userId })
+        });
+        
+        if (res?.success) {
+            showToast(`Komentar dari ${userName} telah dihapus!`, "success");
+            if (currentFilmId == filmId && document.getElementById('filmModal')) {
+                closeFilmModal();
+                setTimeout(() => openFilmModal(filmId), 500);
+            }
+            render();
+            return true;
+        } else {
+            showToast(res?.message || "Gagal menghapus komentar!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error deleting rating:", error);
+        showToast("Gagal menghapus komentar!", "error");
+        return false;
+    }
+}
+
 // ==================== AUTH MODAL ====================
 function showAuthModal() {
     const existing = document.getElementById("authModal");
@@ -1068,17 +1145,17 @@ function showAuthModal() {
                 </div>
                 <div class="modal-body" style="padding:20px;">
                     <div id="loginForm">
-                        <div class="form-group" style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px; font-weight:600;"><i class="fas fa-user"></i> Username</label><input type="text" id="loginUsername" placeholder="Masukkan username" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group" style="margin-bottom:15px;"><label style="display:block; margin-bottom:5px; font-weight:600;"><i class="fas fa-lock"></i> Password</label><input type="password" id="loginPassword" placeholder="Masukkan password" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <button onclick="doLogin()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-sign-in-alt"></i> Login</button>
+                        <div class="form-group" style="margin-bottom:15px;"><label><i class="fas fa-user"></i> Username</label><input type="text" id="loginUsername" placeholder="Masukkan username" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                        <div class="form-group" style="margin-bottom:15px;"><label><i class="fas fa-lock"></i> Password</label><input type="password" id="loginPassword" placeholder="Masukkan password" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                        <button onclick="doLogin()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;">Login</button>
                         <div class="toggle-form" style="margin-top:15px; text-align:center;">Belum punya akun? <span onclick="showRegisterForm()" style="color:#667eea; cursor:pointer;">Daftar sekarang</span></div>
                     </div>
                     <div id="registerForm" style="display:none;">
-                        <div class="form-group"><label><i class="fas fa-user"></i> Username</label><input type="text" id="regUsername" placeholder="Pilih username"></div>
-                        <div class="form-group"><label><i class="fas fa-lock"></i> Password</label><input type="password" id="regPassword" placeholder="Minimal 6 karakter"></div>
-                        <div class="form-group"><label><i class="fas fa-check-circle"></i> Konfirmasi Password</label><input type="password" id="regConfirmPassword" placeholder="Konfirmasi password"></div>
-                        <div class="form-group"><label><i class="fas fa-id-card"></i> Nama Tampilan</label><input type="text" id="regDisplayName" placeholder="Nama yang akan ditampilkan"></div>
-                        <button onclick="doRegister()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;"><i class="fas fa-user-plus"></i> Daftar</button>
+                        <div class="form-group"><label>Username</label><input type="text" id="regUsername" placeholder="Pilih username"></div>
+                        <div class="form-group"><label>Password</label><input type="password" id="regPassword" placeholder="Minimal 6 karakter"></div>
+                        <div class="form-group"><label>Konfirmasi Password</label><input type="password" id="regConfirmPassword" placeholder="Konfirmasi password"></div>
+                        <div class="form-group"><label>Nama Tampilan</label><input type="text" id="regDisplayName" placeholder="Nama yang akan ditampilkan"></div>
+                        <button onclick="doRegister()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Daftar</button>
                         <div class="toggle-form" style="margin-top:15px; text-align:center;">Sudah punya akun? <span onclick="showLoginForm()" style="color:#667eea; cursor:pointer;">Login sekarang</span></div>
                     </div>
                 </div>
@@ -1105,17 +1182,17 @@ function openAddFilmModal() {
                     <span class="close-modal" onclick="closeAddFilmModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
                 </div>
                 <div class="modal-body" style="padding:20px;">
-                    <div class="form-group"><label><i class="fas fa-film"></i> Judul Film</label><input type="text" id="newFilmTitle" placeholder="Contoh: Inception" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                    <div class="form-group"><label>Judul Film</label><input type="text" id="newFilmTitle" placeholder="Contoh: Inception" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
                     <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                        <div class="form-group"><label><i class="fas fa-calendar"></i> Tahun Rilis</label><input type="number" id="newFilmYear" placeholder="2024" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group"><label><i class="fas fa-image"></i> URL Poster</label><input type="text" id="newFilmPoster" placeholder="https://..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                        <div class="form-group"><label>Tahun Rilis</label><input type="number" id="newFilmYear" placeholder="2024" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                        <div class="form-group"><label>URL Poster</label><input type="text" id="newFilmPoster" placeholder="https://..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
                     </div>
-                    <div class="form-group"><label><i class="fab fa-youtube"></i> URL Trailer</label><input type="text" id="newFilmTrailer" placeholder="https://youtube.com/..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label><i class="fas fa-align-left"></i> Sinopsis</label><textarea id="newFilmSynopsis" rows="4" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></textarea></div>
-                    <div class="form-group"><label><i class="fas fa-users"></i> Aktor (pisah koma)</label><input type="text" id="newFilmActors" placeholder="Tom Hanks, Leonardo DiCaprio" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                    <div class="form-group"><label>URL Trailer</label><input type="text" id="newFilmTrailer" placeholder="https://youtube.com/..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
+                    <div class="form-group"><label>Sinopsis</label><textarea id="newFilmSynopsis" rows="4" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></textarea></div>
+                    <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="newFilmActors" placeholder="Tom Hanks, Leonardo DiCaprio" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="addNewFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;"><i class="fas fa-save"></i> Tambah Film</button>
-                        <button onclick="closeAddFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;"><i class="fas fa-times"></i> Batal</button>
+                        <button onclick="addNewFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Tambah Film</button>
+                        <button onclick="closeAddFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
                     </div>
                 </div>
             </div>
@@ -1148,8 +1225,8 @@ function openEditFilmModal(id) {
                     <div class="form-group"><label>Sinopsis</label><textarea id="editFilmSynopsis" rows="4" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">${escapeHtml(film.synopsis)}</textarea></div>
                     <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="editFilmActors" value="${film.actors ? film.actors.join(', ') : ''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="updateFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;"><i class="fas fa-save"></i> Simpan</button>
-                        <button onclick="closeEditFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;"><i class="fas fa-times"></i> Batal</button>
+                        <button onclick="updateFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Simpan</button>
+                        <button onclick="closeEditFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
                     </div>
                 </div>
             </div>
@@ -1262,7 +1339,7 @@ function updateUI() {
     
     if (isAdminLoggedIn) {
         const p = getProfile("admin");
-        disp.innerHTML = `${p.avatarValue ? `<img src="${p.avatarValue}" style="width:28px;height:28px;border-radius:50%;margin-right:6px;">` : '<i class="fas fa-user-shield" style="margin-right:6px;"></i>'} ${escapeHtml(p.displayName)} <span class="admin-badge" style="background:#f59e0b; font-size:10px; padding:2px 8px; border-radius:20px; color:white; margin-left:5px;align-items:center;">Admin</span>`;
+        disp.innerHTML = `${p.avatarValue ? `<img src="${p.avatarValue}" style="width:28px;height:28px;border-radius:50%;margin-right:6px;">` : '<i class="fas fa-user-shield" style="margin-right:6px;"></i>'} ${escapeHtml(p.displayName)} <span class="admin-badge" style="background:#f59e0b; font-size:10px; padding:2px 8px; border-radius:20px; color:white; margin-left:5px;">Admin</span>`;
         auth.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
         auth.onclick = logout;
         auth.classList.add("logout-btn");
@@ -1308,89 +1385,6 @@ function initNav() {
     });
 }
 
-// ==================== FUNGSI REPORT KOMENTAR ====================
-
-async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    if (!currentUser && !isAdminLoggedIn) {
-        showToast("Login dulu untuk melaporkan komentar!", "error");
-        showAuthModal();
-        return false;
-    }
-    
-    if (currentUser === reportedByName) {
-        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
-        return false;
-    }
-    
-    const confirmed = confirm(`Laporkan komentar dari "${reportedByName}"?\n\nKomentar: "${comment}"\n\nLaporan akan ditinjau oleh admin.`);
-    if (!confirmed) return false;
-    
-    try {
-        const res = await apiCall('/api/reports', {
-            method: 'POST',
-            body: JSON.stringify({
-                filmId,
-                filmTitle,
-                reportedUserId,
-                reportedByName,
-                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
-                comment,
-                rating,
-                timestamp
-            })
-        });
-        
-        if (res?.success) {
-            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
-            return true;
-        } else {
-            showToast(res?.message || "Gagal mengirim laporan!", "error");
-            return false;
-        }
-    } catch (error) {
-        console.error("Error reporting comment:", error);
-        showToast("Gagal mengirim laporan!", "error");
-        return false;
-    }
-}
-
-// ==================== ADMIN DELETE RATING (LANGSUNG) ====================
-
-async function adminDeleteRating(filmId, userId, comment, userName) {
-    if (!isAdminLoggedIn) {
-        showToast("Hanya admin yang dapat menghapus komentar!", "error");
-        return;
-    }
-    
-    const confirmed = confirm(`Hapus komentar dari "${userName}"?\n\nKomentar: "${comment}"\n\nTindakan ini tidak dapat dibatalkan.`);
-    if (!confirmed) return;
-    
-    try {
-        const res = await apiCall('/api/ratings', {
-            method: 'DELETE',
-            body: JSON.stringify({ filmId, userId })
-        });
-        
-        if (res?.success) {
-            showToast(`Komentar dari ${userName} telah dihapus!`, "success");
-            // Refresh modal jika terbuka
-            if (currentFilmId == filmId && document.getElementById('filmModal')) {
-                closeFilmModal();
-                setTimeout(() => openFilmModal(filmId), 500);
-            }
-            render();
-            return true;
-        } else {
-            showToast(res?.message || "Gagal menghapus komentar!", "error");
-            return false;
-        }
-    } catch (error) {
-        console.error("Error deleting rating:", error);
-        showToast("Gagal menghapus komentar!", "error");
-        return false;
-    }
-}
-
 // ==================== GLOBAL FUNCTIONS EXPOSED ====================
 window.doLogin = doLogin;
 window.doRegister = doRegister;
@@ -1428,6 +1422,9 @@ window.changeView = changeView;
 window.performSearch = performSearch;
 window.performActorSearch = performActorSearch;
 window.clearActorSearch = clearActorSearch;
+window.filterReports = filterReports;
+window.reportComment = reportComment;
+window.adminDeleteRating = adminDeleteRating;
 
 // ==================== START APP ====================
 initSocket();
