@@ -419,7 +419,7 @@ function renderBeranda() {
         filtered = films.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     
-    let html = `
+        let html = `
         <div class="film-slider-section">
             <h2>🔥 Film Populer</h2>
             <div class="film-slider" style="display:flex; gap:20px; overflow-x:auto; padding:10px 0;">
@@ -448,8 +448,7 @@ function renderBeranda() {
         <h2>🎬 Semua Film</h2>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
-            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
+            <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 30px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
         </div>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
             ${filtered.map(f => {
@@ -540,8 +539,7 @@ function renderTopActors() {
         <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas</p>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
-            <button onclick="clearActorSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
+            <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 30px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
             ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Tambah Aktor</button>` : ''}
         </div>
         <div class="actors-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:16px;">
