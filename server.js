@@ -87,7 +87,6 @@ const ActorRatingSchema = new mongoose.Schema({
 });
 const ActorRating = mongoose.model('ActorRating', ActorRatingSchema);
 
-// Update ReportSchema dengan menambahkan reportReason
 const ReportSchema = new mongoose.Schema({
     filmId: mongoose.Schema.Types.ObjectId,
     filmTitle: String,
@@ -327,6 +326,8 @@ app.delete('/api/ratings', async (req, res) => {
         }
         
         await emitRatingUpdate(filmId);
+        io.emit('rating-deleted', { filmId, userId: userObjectId });
+        
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting rating:', error);
@@ -461,10 +462,23 @@ app.post('/api/reports', async (req, res) => {
     try {
         const { filmId, filmTitle, reportedUserId, reportedByName, reportedBy, comment, rating, timestamp, reportReason } = req.body;
         
+        // Konversi reportedUserId ke ObjectId
+        let reportedUserObjectId;
+        const user = await User.findOne({ username: reportedByName });
+        if (user) {
+            reportedUserObjectId = user._id;
+        } else {
+            try {
+                reportedUserObjectId = new mongoose.Types.ObjectId(reportedUserId);
+            } catch (err) {
+                reportedUserObjectId = reportedUserId;
+            }
+        }
+        
         // Cek apakah sudah pernah report
         const existing = await Report.findOne({ 
             filmId, 
-            reportedUserId, 
+            reportedUserId: reportedUserObjectId, 
             reportedBy,
             status: 'pending' 
         });
@@ -476,7 +490,7 @@ app.post('/api/reports', async (req, res) => {
         const report = new Report({ 
             filmId, 
             filmTitle, 
-            reportedUserId, 
+            reportedUserId: reportedUserObjectId, 
             reportedByName, 
             reportedBy, 
             comment, 
@@ -524,6 +538,8 @@ app.put('/api/reports/:id', async (req, res) => {
                 message: `Komentar dari ${report.reportedByName} telah dihapus!`, 
                 type: 'success' 
             });
+            
+            io.emit('rating-deleted', { filmId: report.filmId, userId: report.reportedUserId });
         } else {
             io.emit('show-toast', { 
                 message: `Laporan terhadap ${report.reportedByName} ditolak.`, 
@@ -581,7 +597,7 @@ mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
     .then(async () => {
         console.log('✅ MongoDB connected');
 
-        // Seed data
+        // Seed data jika kosong
         const userCount = await User.countDocuments();
         if (userCount === 0) {
             console.log('🌱 Seeding default users...');
