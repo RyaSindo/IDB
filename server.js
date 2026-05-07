@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static('public')); // Hanya sekali
+app.use(express.static('public'));
 
 app.get('/health', (req, res) => res.send('OK'));
 
@@ -405,16 +405,13 @@ app.post('/api/upload-profile', async (req, res) => {
 });
 
 // ---- Serve frontend ----
-// app.use(express.static('public')) sudah di atas
 app.use((req, res) => {
     res.sendFile('index.html', { root: 'public' });
 });
 
 // ==================== MONGOOSE CONNECTION & START SERVER ====================
-// Opsi koneksi untuk mengatasi error sertifikat (development only)
+// Opsi koneksi untuk mongoose 7+ (tanpa useNewUrlParser/useUnifiedTopology)
 const mongooseOptions = {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
     serverSelectionTimeoutMS: 5000,
     // Hanya untuk development, hapus atau set false untuk production
     tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
