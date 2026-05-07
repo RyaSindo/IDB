@@ -309,9 +309,26 @@ async function adminDeleteFilm(id) {
 
 // ======================= RATINGS =======================
 async function addRating(fid, uid, rating, comment) {
-    const res = await apiCall('/api/ratings', { method: 'POST', body: JSON.stringify({ filmId: fid, userId: uid, rating, comment }) });
-    if (res?.success) { await loadData(true); showToast("Rating disimpan!", "success"); }
-    else showToast("Gagal menyimpan rating!", "error");
+    try {
+        console.log('Menyimpan rating:', { fid, uid, rating, comment });
+        const res = await apiCall('/api/ratings', { 
+            method: 'POST', 
+            body: JSON.stringify({ filmId: fid, userId: uid, rating, comment }) 
+        });
+        console.log('Response rating:', res);
+        if (res?.success) { 
+            await loadData(true); 
+            showToast("Rating disimpan!", "success");
+            return true;
+        } else {
+            showToast(res?.message || "Gagal menyimpan rating!", "error");
+            return false;
+        }
+    } catch (error) {
+        console.error("Error addRating:", error);
+        showToast("Gagal menyimpan rating!", "error");
+        return false;
+    }
 }
 async function deleteRating(fid, uid) {
     const res = await apiCall('/api/ratings', { method: 'DELETE', body: JSON.stringify({ filmId: fid, userId: uid }) });
@@ -745,7 +762,10 @@ function changeView(view) {
 // ==================== MODAL FUNCTIONS ====================
 function openFilmModal(id) {
     const film = films.find(f => f.id == id);
-    if (!film) return;
+    if (!film) {
+        console.error('Film tidak ditemukan:', id);
+        return;
+    }
     
     joinFilmRoom(id);
     
@@ -753,6 +773,15 @@ function openFilmModal(id) {
     const uid = isAdminLoggedIn ? "admin" : currentUser;
     const userRating = uid ? getUserRating(id, uid) : null;
     const inWatchlist = uid ? isInWatchlist(uid, id) : false;
+    
+    console.log('User rating:', userRating);
+    
+    // Set currentRating dari userRating jika ada
+    if (userRating) {
+        currentRating = userRating.rating;
+    } else {
+        currentRating = 7;
+    }
     
     const html = `
         <div id="filmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
@@ -779,7 +808,7 @@ function openFilmModal(id) {
                         ${uid ? `
                             <label style="font-weight:600; margin-bottom:10px; display:block;"><i class="fas fa-star"></i> Rating Kamu</label>
                             <div class="stars" id="starSelector" style="display:flex; gap:8px; justify-content:center; margin:15px 0;">
-                                ${[1,2,3,4,5,6,7,8,9,10].map(s => `<span class="star" data-rating="${s}" style="font-size:32px; cursor:pointer; color:${userRating?.rating >= s ? '#f59e0b' : '#cbd5e0'};">★</span>`).join('')}
+                                ${[1,2,3,4,5,6,7,8,9,10].map(s => `<span class="star" data-rating="${s}" style="font-size:32px; cursor:pointer; color:${userRating && userRating.rating >= s ? '#f59e0b' : '#cbd5e0'};">★</span>`).join('')}
                             </div>
                             <textarea id="commentInput" rows="3" placeholder="Tulis komentar..." style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:12px; margin:10px 0; font-family:inherit;">${userRating?.comment || ''}</textarea>
                             <div class="modal-actions" style="display:flex; gap:10px;">
@@ -820,14 +849,13 @@ function openFilmModal(id) {
     
     if (uid) {
         const stars = document.querySelectorAll("#starSelector .star");
-        let cr = userRating?.rating || 7;
         stars.forEach(s => {
             const val = parseInt(s.dataset.rating);
-            if (val <= cr) s.classList.add("active");
-            s.onclick = () => {
-                cr = val;
+            s.onclick = (e) => {
+                e.stopPropagation();
+                currentRating = val;
                 stars.forEach(ss => {
-                    if (parseInt(ss.dataset.rating) <= cr) {
+                    if (parseInt(ss.dataset.rating) <= currentRating) {
                         ss.classList.add("active");
                         ss.style.color = "#f59e0b";
                     } else {
@@ -835,10 +863,10 @@ function openFilmModal(id) {
                         ss.style.color = "#cbd5e0";
                     }
                 });
-                currentRating = cr;
+                console.log('Rating dipilih:', currentRating);
             };
         });
-        currentRating = cr;
+        console.log('Current rating:', currentRating);
     }
 }
 
@@ -853,23 +881,49 @@ function closeFilmModal() {
 }
 
 async function submitRating(id) {
-    if (!currentUser && !isAdminLoggedIn) { showToast("Login dulu!", "error"); return; }
+    if (!currentUser && !isAdminLoggedIn) { 
+        showToast("Login dulu!", "error"); 
+        showAuthModal(); 
+        return; 
+    }
+    
     const rating = currentRating || 7;
-    const comment = document.getElementById("commentInput")?.value.trim() || "";
+    const commentInput = document.getElementById("commentInput");
+    const comment = commentInput ? commentInput.value.trim() : "";
     const uid = isAdminLoggedIn ? "admin" : currentUser;
-    await addRating(id, uid, rating, comment);
-    closeFilmModal();
-    openFilmModal(id);
-    render();
+    
+    console.log('Submit rating:', { id, uid, rating, comment });
+    
+    const success = await addRating(id, uid, rating, comment);
+    if (success) {
+        closeFilmModal();
+        // Tunggu sebentar sebelum membuka modal lagi agar data sudah terupdate
+        setTimeout(() => {
+            openFilmModal(id);
+        }, 500);
+        render();
+    }
+
 }
 
 async function deleteRatingFilm(id) {
     if (!confirm("Hapus rating ini?")) return;
     const uid = isAdminLoggedIn ? "admin" : currentUser;
-    await deleteRating(id, uid);
-    closeFilmModal();
-    openFilmModal(id);
-    render();
+    const res = await apiCall('/api/ratings', { 
+        method: 'DELETE', 
+        body: JSON.stringify({ filmId: id, userId: uid }) 
+    });
+    if (res?.success) { 
+        await loadData(true); 
+        showToast("Rating dihapus!", "info");
+        closeFilmModal();
+        setTimeout(() => {
+            openFilmModal(id);
+        }, 500);
+        render();
+    } else {
+        showToast(res?.message || "Gagal menghapus rating!", "error");
+    }
 }
 
 function joinFilmRoom(filmId) {
