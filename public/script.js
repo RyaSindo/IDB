@@ -10,54 +10,46 @@ let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
 
-// ======================= SOCKET.IO REAL-TIME =======================
+// ======================= SOCKET.IO REAL-TIME (Tanpa Notifikasi) =======================
 function initSocket() {
     socket = io({ transports: ['polling'] });
     
     socket.on('connect', () => {
         console.log('✅ Real-time connected');
-        showRealtimeBadge();
     });
     
     socket.on('film-rating-updated', (data) => {
         console.log('📊 Film rating updated', data);
         if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
-        if (currentFilmId === data.filmId) updateModalRating(data);
-        showRealtimeNotification(`⭐ Rating "${data.filmTitle}" diperbarui! Rata-rata: ${data.newAvg}/10`, 'info');
+        if (currentFilmId == data.filmId) updateModalRating(data);
     });
     
     socket.on('actor-added', (data) => {
         console.log('⭐ Actor added:', data.actor);
-        showRealtimeNotification(`Aktor baru: ${data.actor.name}`, 'success');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-updated', (data) => {
         console.log('📝 Actor updated:', data.actor);
-        showRealtimeNotification(`Aktor "${data.actor.name}" diperbarui`, 'info');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-deleted', (data) => {
         console.log('🗑️ Actor deleted:', data.actorName);
-        showRealtimeNotification(`Aktor "${data.actorName}" dihapus`, 'warning');
         if (currentView === 'topactors') refreshCurrentView();
     });
     socket.on('actor-rating-updated', (data) => {
         console.log('⭐ Actor rating updated', data);
         if (currentView === 'topactors') refreshCurrentView();
-        showRealtimeNotification(`⭐ Rating ${data.actorName} diperbarui! Rata-rata: ${data.newAvg}/5`, 'success');
     });
     
     socket.on('new-comment', (data) => {
         console.log('💬 New comment', data);
-        if (currentFilmId === data.filmId && document.getElementById('filmModal')) {
+        if (currentFilmId == data.filmId && document.getElementById('filmModal')) {
             addCommentToUI(data);
         }
-        showRealtimeNotification(`💬 Komentar baru dari ${data.displayName}`, 'info');
     });
     
     socket.on('data-updated', (data) => {
         console.log('🔄 Database updated');
-        showRealtimeNotification('Data diperbarui oleh pengguna lain', 'info');
         refreshCurrentView();
     });
     socket.on('global-refresh', () => {
@@ -67,29 +59,24 @@ function initSocket() {
     
     socket.on('film-added', (data) => {
         console.log('🎬 Film added:', data.film);
-        showRealtimeNotification(`Film baru: ${data.film.title}`, 'success');
         refreshCurrentView();
     });
     socket.on('film-updated', (data) => {
         console.log('📝 Film updated:', data.film);
-        showRealtimeNotification(`Film "${data.film.title}" diperbarui`, 'info');
         refreshCurrentView();
     });
     socket.on('film-deleted', (data) => {
         console.log('🗑️ Film deleted:', data.filmTitle);
-        showRealtimeNotification(`Film "${data.filmTitle}" dihapus`, 'warning');
         refreshCurrentView();
     });
     
     socket.on('watchlist-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
-            showRealtimeNotification(data.action === 'added' ? 'Film ditambahkan ke watchlist' : 'Film dihapus dari watchlist', 'info');
             if (currentView === 'watchlist') refreshCurrentView();
         }
     });
     socket.on('profile-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
-            showRealtimeNotification('Profil Anda diperbarui', 'success');
             updateUI();
         }
         if (currentView === 'profile') refreshCurrentView();
@@ -101,14 +88,9 @@ function initSocket() {
     
     socket.on('disconnect', (reason) => {
         console.log('❌ Real-time disconnected:', reason);
-        const badge = document.querySelector('.realtime-badge');
-        if (badge) badge.remove();
-        showRealtimeNotification('Koneksi real-time terputus, mencoba menyambung...', 'warning');
     });
     socket.on('reconnect', () => {
         console.log('✅ Real-time reconnected');
-        showRealtimeBadge();
-        showRealtimeNotification('Koneksi real-time tersambung kembali!', 'success');
         refreshCurrentView();
     });
 }
@@ -125,35 +107,6 @@ function updateModalRating(data) {
         avgEl.style.backgroundColor = '#fef3c7';
         setTimeout(() => { if (avgEl) avgEl.style.backgroundColor = ''; }, 500);
     }
-}
-
-function showRealtimeNotification(message, type = 'info') {
-    const oldNotif = document.querySelector('.realtime-notification');
-    if (oldNotif) oldNotif.remove();
-    const notification = document.createElement('div');
-    notification.className = `realtime-notification ${type}`;
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="fas ${type === 'success' ? 'fa-check-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle')}"></i>
-            <span>${message}</span>
-        </div>
-        <div class="notification-progress"></div>
-    `;
-    document.body.appendChild(notification);
-    setTimeout(() => notification.classList.add('show'), 10);
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
-}
-
-function showRealtimeBadge() {
-    if (document.querySelector('.realtime-badge')) return;
-    const badge = document.createElement('div');
-    badge.className = 'realtime-badge online';
-    badge.innerHTML = '<i class="fas fa-sync-alt fa-fw fa-spin"></i> Live Updates <span class="status-dot"></span>';
-    badge.onclick = () => showRealtimeNotification('Koneksi real-time aktif!', 'success');
-    document.body.appendChild(badge);
 }
 
 // ======================= API HELPERS =======================
@@ -327,7 +280,7 @@ async function addNewFilm() {
 
 async function updateFilm() {
     if (!isAdminLoggedIn) return;
-    const id = document.getElementById("editFilmId")?.value; // string, tidak perlu parseInt
+    const id = document.getElementById("editFilmId")?.value;
     const title = document.getElementById("editFilmTitle")?.value.trim();
     const year = parseInt(document.getElementById("editFilmYear")?.value);
     const trailer = document.getElementById("editFilmTrailer")?.value.trim();
@@ -430,6 +383,36 @@ async function saveProfile() {
 }
 
 // ==================== RENDER FUNCTIONS ====================
+function performSearch() {
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) {
+        searchQuery = searchInput.value;
+        renderBeranda();
+    }
+}
+
+function clearSearch() { 
+    searchQuery = ""; 
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput) searchInput.value = "";
+    renderBeranda(); 
+}
+
+function performActorSearch() {
+    const actorSearch = document.getElementById("actorSearch");
+    if (actorSearch) {
+        actorSearchQuery = actorSearch.value;
+        renderTopActors();
+    }
+}
+
+function clearActorSearch() {
+    actorSearchQuery = "";
+    const actorSearch = document.getElementById("actorSearch");
+    if (actorSearch) actorSearch.value = "";
+    renderTopActors();
+}
+
 function renderBeranda() {
     let filtered = films;
     if (searchQuery) {
@@ -452,8 +435,8 @@ function renderBeranda() {
                             </div>
                             ${isAdminLoggedIn ? `
                                 <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; opacity:0; transition:opacity 0.2s;">
-                                    <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white;">✏️</button>
-                                    <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white;">🗑️</button>
+                                    <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
+                                    <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
                                 </div>
                             ` : ''}
                         </div>
@@ -465,7 +448,8 @@ function renderBeranda() {
         <h2>🎬 Semua Film</h2>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Hapus</button>
+            <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
+            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
         </div>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
             ${filtered.map(f => {
@@ -480,21 +464,17 @@ function renderBeranda() {
                         </div>
                         ${isAdminLoggedIn ? `
                             <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; opacity:0; transition:opacity 0.2s;">
-                                <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white;">✏️</button>
-                                <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white;">🗑️</button>
+                                <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
+                                <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
                             </div>
                         ` : ''}
                     </div>
                 `;
             }).join('')}
         </div>
+        ${filtered.length === 0 ? '<p style="text-align:center;padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
     `;
     document.getElementById("mainContent").innerHTML = html;
-    
-    const searchInput = document.getElementById("searchInput");
-    if (searchInput) {
-        searchInput.oninput = (e) => { searchQuery = e.target.value; renderBeranda(); };
-    }
 }
 
 function renderTopRating() {
@@ -557,10 +537,11 @@ function renderTopActors() {
     
     let html = `
         <h2>⭐ Top Aktor</h2>
-        <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas (Real-time)</p>
+        <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas</p>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="actorSearchQuery='';renderTopActors()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Hapus</button>
+            <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
+            <button onclick="clearActorSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
             ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Tambah Aktor</button>` : ''}
         </div>
         <div class="actors-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:16px;">
@@ -595,9 +576,6 @@ function renderTopActors() {
     });
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
-    
-    const as = document.getElementById("actorSearch");
-    if (as) as.oninput = (e) => { actorSearchQuery = e.target.value; renderTopActors(); };
 }
 
 function renderWatchlist() {
@@ -614,7 +592,7 @@ function renderWatchlist() {
     
     let html = `<h2>📌 Watchlist Saya</h2><div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">`;
     wl.forEach(w => {
-        const film = films.find(f => f.id === w.filmId.toString());
+        const film = films.find(f => f.id == w.filmId);
         if (film) {
             html += `
                 <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${film.id}')">
@@ -657,13 +635,13 @@ function viewProfile(uid) {
         <h3>🏆 Top 3 Film</h3>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
             ${prof.top3Films.map(id => {
-                const f = films.find(f => f.id === id);
+                const f = films.find(f => f.id == id);
                 return f ? `<div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer;" onclick="openFilmModal('${f.id}')"><img class="poster-img" src="${f.posterUrl}" style="width:100%; height:250px; object-fit:cover;"><div class="poster-info" style="padding:10px;"><div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div></div></div>` : '';
             }).join('') || '<p style="color:#999;">Belum memilih top 3 film</p>'}
         </div>
         <h3>⭐ Rating & Komentar</h3>
         ${userRatings.map(r => {
-            const f = films.find(f => f.id === r.filmId.toString());
+            const f = films.find(f => f.id == r.filmId);
             return f ? `<div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;"><strong>${escapeHtml(f.title)}</strong><br>⭐ ${r.rating}/10<br>"${escapeHtml(r.comment)}"</div>` : '';
         }).join('') || '<p style="color:#999;">Belum memberi rating</p>'}
     `;
@@ -679,7 +657,7 @@ function renderAbout() {
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
                 <h2><i class="fas fa-info-circle"></i> TENTANG IDB</h2>
-                <p><strong>IDB (Indie Database Film)</strong> adalah platform rating film independen dengan fitur real-time update rating dan komentar.</p>
+                <p><strong>IDB (Indie Database Film)</strong> adalah platform rating film independen dengan fitur rating dan komentar.</p>
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
                 <h2><i class="fas fa-star"></i> FITUR UNGGULAN</h2>
@@ -688,7 +666,6 @@ function renderAbout() {
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-user" style="font-size:40px;color:#667eea;"></i><h3>Rating Aktor</h3><p>1-5 bintang</p></div>
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-bookmark" style="font-size:40px;color:#667eea;"></i><h3>Watchlist</h3><p>Simpan film favorit</p></div>
                     <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-trophy" style="font-size:40px;color:#667eea;"></i><h3>Top Rating</h3><p>Peringkat film terbaik</p></div>
-                    <div style="text-align:center;padding:20px;background:#f8fafc;border-radius:16px;"><i class="fas fa-sync-alt" style="font-size:40px;color:#667eea;"></i><h3>Real-time Update</h3><p>Rating & komentar update langsung</p></div>
                 </div>
             </div>
             <div style="background:white;border-radius:20px;padding:30px;margin-top:20px;">
@@ -763,11 +740,9 @@ function changeView(view) {
     render();
 }
 
-function clearSearch() { searchQuery = ""; renderBeranda(); }
-
 // ==================== MODAL FUNCTIONS ====================
 function openFilmModal(id) {
-    const film = films.find(f => f.id === id);
+    const film = films.find(f => f.id == id);
     if (!film) return;
     
     joinFilmRoom(id);
@@ -1001,7 +976,7 @@ function closeAddFilmModal() { const m = document.getElementById("addFilmModal")
 
 function openEditFilmModal(id) {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
-    const film = films.find(f => f.id === id);
+    const film = films.find(f => f.id == id);
     if (!film) return;
     tempPosterImage = null;
     const html = `
@@ -1089,7 +1064,7 @@ function closeEditActorModal() { const m = document.getElementById("editActorMod
 function openSettingModal() {
     const uid = isAdminLoggedIn ? "admin" : currentUser;
     const prof = getProfile(uid);
-    const ratedFilms = ratings.filter(r => r.userId && r.userId.toString() === uid.toString()).map(r => films.find(f => f.id === r.filmId.toString())).filter(f => f);
+    const ratedFilms = ratings.filter(r => r.userId && r.userId.toString() === uid.toString()).map(r => films.find(f => f.id == r.filmId)).filter(f => f);
     tempAvatarImage = prof.avatarValue;
     const avatar = prof.avatarValue || `https://ui-avatars.com/api/?name=${prof.displayName}&background=667eea&color=fff`;
     
@@ -1106,9 +1081,9 @@ function openSettingModal() {
                     <div class="form-group"><label>Bio</label><textarea id="settingBio" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">${escapeHtml(prof.bio)}</textarea></div>
                     ${ratedFilms.length > 0 ? `
                         <div class="form-group"><label>Top 3 Film</label>
-                            <select id="top1Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #1 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[0] === f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
-                            <select id="top2Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #2 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[1] === f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
-                            <select id="top3Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"><option value="">-- Film #3 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[2] === f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
+                            <select id="top1Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #1 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[0] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
+                            <select id="top2Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #2 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[1] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
+                            <select id="top3Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"><option value="">-- Film #3 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[2] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
                         </div>
                     ` : '<p>Belum ada film yang dirating</p>'}
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;"><button onclick="saveProfile()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Simpan</button><button onclick="closeSettingModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button></div>
@@ -1216,6 +1191,9 @@ window.clearSearch = clearSearch;
 window.viewProfile = viewProfile;
 window.resolveReport = resolveReport;
 window.changeView = changeView;
+window.performSearch = performSearch;
+window.performActorSearch = performActorSearch;
+window.clearActorSearch = clearActorSearch;
 
 // ==================== START APP ====================
 initSocket();
