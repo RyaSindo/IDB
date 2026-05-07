@@ -76,6 +76,7 @@ header {
     display: flex;
     gap: 12px;
     align-items: center;
+    justify-content: center;
 }
 
 .login-btn,
@@ -402,7 +403,7 @@ header {
 }
 
 .admin-fab {
-    width: 48px;
+    width: 50px;
     height: 50px;
     border-radius: 50%;
     background: #667eea;
