@@ -87,6 +87,7 @@ const ActorRatingSchema = new mongoose.Schema({
 });
 const ActorRating = mongoose.model('ActorRating', ActorRatingSchema);
 
+// Update ReportSchema dengan menambahkan reportReason
 const ReportSchema = new mongoose.Schema({
     filmId: mongoose.Schema.Types.ObjectId,
     filmTitle: String,
@@ -96,7 +97,7 @@ const ReportSchema = new mongoose.Schema({
     comment: String,
     rating: Number,
     timestamp: Date,
-    reportReason: { type: String, default: "" }, // Tambahkan ini
+    reportReason: { type: String, default: "" },
     status: { type: String, default: 'pending' }
 });
 const Report = mongoose.model('Report', ReportSchema);

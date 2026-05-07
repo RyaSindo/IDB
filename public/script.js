@@ -939,7 +939,7 @@ function openFilmModal(id) {
                                     <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
                                     <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
                                     <div style="display:flex; gap:8px; margin-top:8px;">
-                                        ${canReport ? `<button class="report-btn" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
+                                        ${canReport ? `<button class="report-btn" type="button" onclick="event.stopPropagation(); reportComment('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
                                     </div>
                                 </div>
                             `;
@@ -1059,7 +1059,9 @@ function addCommentToUI(comment) {
     }, 1000);
 }
 
-async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+function reportComment(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    console.log('reportComment dipanggil:', { filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp });
+    
     if (!currentUser && !isAdminLoggedIn) {
         showToast("Login dulu untuk melaporkan komentar!", "error");
         showAuthModal();
@@ -1071,31 +1073,8 @@ async function reportComment(filmId, filmTitle, reportedUserId, reportedByName, 
         return false;
     }
     
-    const confirmed = confirm(`Laporkan komentar dari "${reportedByName}"?\n\nKomentar: "${comment}"\n\nLaporan akan ditinjau oleh admin.`);
-    if (!confirmed) return false;
-    
-    try {
-        const res = await apiCall('/api/reports', {
-            method: 'POST',
-            body: JSON.stringify({
-                filmId, filmTitle, reportedUserId, reportedByName,
-                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
-                comment, rating, timestamp
-            })
-        });
-        
-        if (res?.success) {
-            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
-            return true;
-        } else {
-            showToast(res?.message || "Gagal mengirim laporan!", "error");
-            return false;
-        }
-    } catch (error) {
-        console.error("Error reporting comment:", error);
-        showToast("Gagal mengirim laporan!", "error");
-        return false;
-    }
+    // Tampilkan modal
+    showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp);
 }
 
 async function adminDeleteRating(filmId, userId, comment, userName) {
@@ -1388,7 +1367,10 @@ function initNav() {
 // ==================== MODAL REPORT KOMENTAR ====================
 
 function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    // Buat modal popup untuk alasan pelaporan
+    // Hapus modal yang sudah ada jika ada
+    const existingModal = document.getElementById("reportModal");
+    if (existingModal) existingModal.remove();
+    
     const modalHtml = `
         <div id="reportModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:2000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
@@ -1406,7 +1388,13 @@ function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comm
                     
                     <div class="form-group">
                         <label style="font-weight:600; margin-bottom:8px; display:block;">Alasan Melaporkan <span style="color:red;">*</span></label>
-                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini...&#10;&#10;Contoh:&#10;- Mengandung kata-kata kasar/penghinaan&#10;- Spam atau promosi tidak relevan&#10;- Informasi yang menyesatkan&#10;- Dll." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-family:inherit; resize:vertical;"></textarea>
+                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini...
+
+Contoh:
+- Mengandung kata-kata kasar/penghinaan
+- Spam atau promosi tidak relevan
+- Informasi yang menyesatkan
+- Dll." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-family:inherit; resize:vertical;"></textarea>
                         <div style="font-size:11px; color:#666; margin-top:5px;">Minimal 5 karakter</div>
                     </div>
                     
@@ -1461,19 +1449,6 @@ async function submitReportWithReason(filmId, filmTitle, reportedUserId, reporte
     
     const categorySelect = document.getElementById("reportCategory");
     const category = categorySelect ? categorySelect.value : "";
-    
-    if (!currentUser && !isAdminLoggedIn) {
-        showToast("Login dulu untuk melaporkan komentar!", "error");
-        showAuthModal();
-        closeReportModal();
-        return false;
-    }
-    
-    if (currentUser === reportedByName) {
-        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
-        closeReportModal();
-        return false;
-    }
     
     const fullReportMessage = category 
         ? `[${category}] ${reason}` 
