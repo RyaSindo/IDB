@@ -205,30 +205,68 @@ app.post('/api/films', async (req, res) => {
 });
 
 app.put('/api/films/:id', async (req, res) => {
-    const { id } = req.params;
-    const { title, year, poster, trailer, synopsis, actors, posterBase64 } = req.body;
-    let posterUrl = poster;
-    if (posterBase64) {
-        const result = await cloudinary.uploader.upload(posterBase64, { folder: 'idb/posters' });
-        posterUrl = result.secure_url;
+    try {
+        const { id } = req.params;
+        const { title, year, poster, trailer, synopsis, actors, posterBase64 } = req.body;
+        
+        console.log('Updating film with ID:', id);
+        
+        let posterUrl = poster;
+        if (posterBase64) {
+            const result = await cloudinary.uploader.upload(posterBase64, { folder: 'idb/posters' });
+            posterUrl = result.secure_url;
+        }
+        
+        const updated = await Film.findByIdAndUpdate(
+            id, 
+            { title, year, posterUrl, trailer, synopsis, actors }, 
+            { new: true }
+        );
+        
+        if (!updated) {
+            return res.status(404).json({ success: false, message: 'Film tidak ditemukan' });
+        }
+        
+        io.emit('film-updated', { film: updated });
+        io.emit('show-toast', { message: `Film "${title}" diperbarui`, type: 'info' });
+        
+        console.log(`Film "${title}" berhasil diupdate`);
+        res.json({ success: true, film: updated });
+    } catch (error) {
+        console.error('Error updating film:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
-    const updated = await Film.findByIdAndUpdate(id, { title, year, posterUrl, trailer, synopsis, actors }, { new: true });
-    if (!updated) return res.status(404).json({ success: false });
-    io.emit('film-updated', { film: updated });
-    io.emit('show-toast', { message: `Film "${title}" diperbarui`, type: 'info' });
-    res.json({ success: true });
 });
 
 app.delete('/api/films/:id', async (req, res) => {
-    const { id } = req.params;
-    const film = await Film.findById(id);
-    if (!film) return res.status(404).json({ success: false });
-    await Film.findByIdAndDelete(id);
-    await Rating.deleteMany({ filmId: id });
-    await Watchlist.deleteMany({ filmId: id });
-    io.emit('film-deleted', { filmId: id, filmTitle: film.title });
-    io.emit('show-toast', { message: `Film "${film.title}" dihapus`, type: 'warning' });
-    res.json({ success: true });
+    try {
+        const { id } = req.params;
+        console.log('Deleting film with ID:', id);
+        
+        const film = await Film.findById(id);
+        if (!film) {
+            return res.status(404).json({ success: false, message: 'Film tidak ditemukan' });
+        }
+        
+        // Hapus film
+        await Film.findByIdAndDelete(id);
+        
+        // Hapus semua rating yang terkait dengan film ini
+        await Rating.deleteMany({ filmId: id });
+        
+        // Hapus semua watchlist yang terkait dengan film ini
+        await Watchlist.deleteMany({ filmId: id });
+        
+        // Emit event ke semua client
+        io.emit('film-deleted', { filmId: id, filmTitle: film.title });
+        io.emit('show-toast', { message: `Film "${film.title}" dihapus`, type: 'warning' });
+        
+        console.log(`Film "${film.title}" berhasil dihapus`);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting film:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // ---- Ratings (DIPERBAIKI: konversi username ke ObjectId) ----

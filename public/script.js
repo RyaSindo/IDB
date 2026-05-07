@@ -475,9 +475,9 @@ function renderBeranda() {
                                 <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
                             </div>
                             ${isAdminLoggedIn ? `
-                                <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; opacity:0; transition:opacity 0.2s;">
-                                    <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
-                                    <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
+                                <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
+                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
+                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
                                 </div>
                             ` : ''}
                         </div>
@@ -504,9 +504,9 @@ function renderBeranda() {
                             <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
                         </div>
                         ${isAdminLoggedIn ? `
-                            <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; opacity:0; transition:opacity 0.2s;">
-                                <button class="admin-edit-card-btn" onclick="event.stopPropagation(); openEditFilmModal('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
-                                <button class="admin-delete-card-btn" onclick="event.stopPropagation(); adminDeleteFilm('${f.id}')" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
+                            <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
+                                <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
+                                <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
                             </div>
                         ` : ''}
                     </div>
@@ -516,6 +516,41 @@ function renderBeranda() {
         ${filtered.length === 0 ? '<p style="text-align:center;padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
     `;
     document.getElementById("mainContent").innerHTML = html;
+    
+    // ==================== ATTACH EVENT LISTENER UNTUK EDIT & DELETE ====================
+    if (isAdminLoggedIn) {
+        // Event listener untuk tombol Edit
+        document.querySelectorAll('.admin-edit-card-btn').forEach(btn => {
+            btn.removeEventListener('click', handleEditClick);
+            btn.addEventListener('click', handleEditClick);
+        });
+        
+        // Event listener untuk tombol Delete
+        document.querySelectorAll('.admin-delete-card-btn').forEach(btn => {
+            btn.removeEventListener('click', handleDeleteClick);
+            btn.addEventListener('click', handleDeleteClick);
+        });
+    }
+}
+
+// Handler function untuk Edit
+function handleEditClick(event) {
+    event.stopPropagation();
+    const filmId = this.getAttribute('data-film-id');
+    const filmTitle = this.getAttribute('data-film-title');
+    console.log('Edit film:', filmId, filmTitle);
+    openEditFilmModal(filmId);
+}
+
+// Handler function untuk Delete
+function handleDeleteClick(event) {
+    event.stopPropagation();
+    const filmId = this.getAttribute('data-film-id');
+    const filmTitle = this.getAttribute('data-film-title');
+    console.log('Delete film:', filmId, filmTitle);
+    if (confirm(`Apakah Anda yakin ingin menghapus film "${filmTitle}"?`)) {
+        adminDeleteFilm(filmId);
+    }
 }
 
 function renderTopRating() {
