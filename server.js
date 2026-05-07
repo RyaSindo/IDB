@@ -411,7 +411,13 @@ app.use((req, res) => {
 });
 
 // ==================== MONGOOSE CONNECTION & START SERVER ====================
-mongoose.connect(process.env.MONGODB_URI)
+mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    tls: true,
+    tlsAllowInvalidCertificates: true,   // Hanya untuk development!
+    serverSelectionTimeoutMS: 5000
+})
     .then(async () => {
         console.log('✅ MongoDB connected');
         
