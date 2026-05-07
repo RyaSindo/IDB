@@ -27,8 +27,12 @@ cloudinary.config({
 // ==================== SOCKET.IO ====================
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { origin: "*" },
-    transports: ['websocket', 'polling']
+    cors: { 
+        origin: "*",
+        credentials: true 
+    },
+    transports: ['websocket', 'polling'],
+    allowEIO3: true  // Tambahkan ini
 });
 
 // ==================== SCHEMAS ====================
