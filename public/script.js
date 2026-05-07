@@ -180,12 +180,12 @@ async function loadData(force = false) {
         if (data) {
             users = data.users || [];
             admins = data.admins || [];
-            films = data.films || [];
+            films = (data.films || []).map(film => ({ ...film, id: film._id }));
             ratings = data.ratings || [];
             watchlist = data.watchlist || [];
             userProfiles = data.userProfiles || {};
             reports = data.reports || [];
-            actors = data.actors || [];
+            actors = (data.actors || []).map(a => ({ ...a, id: a._id }));
             actorRatingsByUser = data.actorRatingsByUser || [];
             
             if (currentToken) {
