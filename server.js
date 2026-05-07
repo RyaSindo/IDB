@@ -9,7 +9,7 @@ const { v2: cloudinary } = require('cloudinary');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ==================== MIDDLEWARE ====================
+// Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -17,14 +17,14 @@ app.use(express.static('public'));
 
 app.get('/health', (req, res) => res.send('OK'));
 
-// ==================== CLOUDINARY CONFIG ====================
+// Cloudinary config
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// ==================== SOCKET.IO ====================
+// Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: { origin: "*", credentials: true },
@@ -100,7 +100,7 @@ const ReportSchema = new mongoose.Schema({
 });
 const Report = mongoose.model('Report', ReportSchema);
 
-// ==================== SOCKET.IO HELPERS ====================
+// Helper fungsi untuk emit update rating
 async function emitRatingUpdate(filmId) {
     const ratings = await Rating.find({ filmId });
     const total = ratings.length;
@@ -123,7 +123,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => console.log('🔌 Client disconnected:', socket.id));
 });
 
-// ==================== SESSION (in-memory) ====================
+// Session in-memory
 let sessions = {};
 
 // ==================== API ROUTES ====================
@@ -231,25 +231,68 @@ app.delete('/api/films/:id', async (req, res) => {
     res.json({ success: true });
 });
 
-// ---- Ratings ----
+// ---- Ratings (DIPERBAIKI: konversi username ke ObjectId) ----
 app.get('/api/ratings', async (req, res) => res.json(await Rating.find()));
 
 app.post('/api/ratings', async (req, res) => {
-    const { filmId, userId, rating, comment } = req.body;
-    await Rating.findOneAndUpdate({ filmId, userId }, { rating, comment, timestamp: new Date() }, { upsert: true });
-    await emitRatingUpdate(filmId);
-    const user = await User.findById(userId);
-    io.to(`film_${filmId}`).emit('new-comment', {
-        userId, displayName: user.displayName, rating, comment, timestamp: Date.now()
-    });
-    res.json({ success: true });
+    try {
+        const { filmId, userId, rating, comment } = req.body;
+        let userObjectId;
+
+        // Cari user berdasarkan username (string)
+        const user = await User.findOne({ username: userId });
+        if (user) {
+            userObjectId = user._id;
+        } else {
+            // Jika userId sudah berupa ObjectId (misalnya admin), coba konversi langsung
+            try {
+                userObjectId = new mongoose.Types.ObjectId(userId);
+            } catch (err) {
+                return res.status(400).json({ success: false, message: 'Invalid userId format' });
+            }
+        }
+
+        await Rating.findOneAndUpdate(
+            { filmId, userId: userObjectId },
+            { rating, comment, timestamp: new Date() },
+            { upsert: true }
+        );
+
+        await emitRatingUpdate(filmId);
+
+        const userData = await User.findById(userObjectId);
+        io.to(`film_${filmId}`).emit('new-comment', {
+            userId: userObjectId,
+            displayName: userData.displayName,
+            rating,
+            comment,
+            timestamp: Date.now()
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error saving rating:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 app.delete('/api/ratings', async (req, res) => {
-    const { filmId, userId } = req.body;
-    await Rating.deleteOne({ filmId, userId });
-    await emitRatingUpdate(filmId);
-    res.json({ success: true });
+    try {
+        const { filmId, userId } = req.body;
+        let userObjectId;
+        const user = await User.findOne({ username: userId });
+        if (user) {
+            userObjectId = user._id;
+        } else {
+            userObjectId = userId;
+        }
+        await Rating.deleteOne({ filmId, userId: userObjectId });
+        await emitRatingUpdate(filmId);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting rating:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // ---- Watchlist ----
@@ -257,16 +300,21 @@ app.get('/api/watchlist', async (req, res) => res.json(await Watchlist.find()));
 
 app.post('/api/watchlist/toggle', async (req, res) => {
     const { userId, filmId } = req.body;
-    const existing = await Watchlist.findOne({ userId, filmId });
+    let userObjectId;
+    const user = await User.findOne({ username: userId });
+    if (user) userObjectId = user._id;
+    else userObjectId = userId;
+
+    const existing = await Watchlist.findOne({ userId: userObjectId, filmId });
     let action;
     if (existing) {
         await existing.deleteOne();
         action = 'removed';
     } else {
-        await Watchlist.create({ userId, filmId });
+        await Watchlist.create({ userId: userObjectId, filmId });
         action = 'added';
     }
-    io.emit('watchlist-updated', { userId, filmId, action });
+    io.emit('watchlist-updated', { userId: userObjectId, filmId, action });
     res.json({ success: true, action });
 });
 
@@ -346,11 +394,16 @@ app.get('/api/actor-ratings', async (req, res) => res.json(await ActorRating.fin
 
 app.post('/api/actor-ratings', async (req, res) => {
     const { actorName, userId, rating } = req.body;
-    await ActorRating.findOneAndUpdate({ actorName, userId }, { rating, timestamp: new Date() }, { upsert: true });
+    let userObjectId;
+    const user = await User.findOne({ username: userId });
+    if (user) userObjectId = user._id;
+    else userObjectId = userId;
+
+    await ActorRating.findOneAndUpdate({ actorName, userId: userObjectId }, { rating, timestamp: new Date() }, { upsert: true });
     const all = await ActorRating.find({ actorName });
     const total = all.length;
     const avg = total > 0 ? (all.reduce((a, b) => a + b.rating, 0) / total).toFixed(1) : "0.0";
-    io.emit('actor-rating-updated', { actorName, userId, rating, newAvg: avg, totalRatings: total });
+    io.emit('actor-rating-updated', { actorName, userId: userObjectId, rating, newAvg: avg, totalRatings: total });
     res.json({ success: true });
 });
 
@@ -375,7 +428,7 @@ app.put('/api/reports/:id', async (req, res) => {
     res.json({ success: true });
 });
 
-// ---- Uploads (base64 to Cloudinary) ----
+// ---- Uploads ----
 app.post('/api/upload-poster', async (req, res) => {
     const { image } = req.body;
     if (!image || !image.startsWith('data:image/')) return res.status(400).json({ success: false });
@@ -400,16 +453,15 @@ app.post('/api/upload-profile', async (req, res) => {
     }
 });
 
-// ---- Serve frontend ----
+// Serve frontend
 app.use((req, res) => {
     res.sendFile('index.html', { root: 'public' });
 });
 
-// ==================== MONGOOSE CONNECTION & START SERVER ====================
-// Opsi koneksi tanpa useNewUrlParser/useUnifiedTopology (sudah default)
+// ==================== KONEKSI MONGOOSE (Tanpa useNewUrlParser) ====================
 const mongooseOptions = {
     serverSelectionTimeoutMS: 5000,
-    // Hanya untuk development, hapus jika di production dan sertifikat valid
+    // Hanya untuk development jika perlu, hapus di production
     tlsAllowInvalidCertificates: process.env.NODE_ENV !== 'production'
 };
 
@@ -417,7 +469,7 @@ mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
     .then(async () => {
         console.log('✅ MongoDB connected');
 
-        // Seed data
+        // Seed data (opsional)
         const userCount = await User.countDocuments();
         if (userCount === 0) {
             console.log('🌱 Seeding default users...');
