@@ -9,6 +9,7 @@ let currentFilmId = null;
 let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
+let isRefreshing = false; // Flag untuk mencegah refresh berlebihan
 
 // ======================= SOCKET.IO REAL-TIME (Tanpa Notifikasi) =======================
 function initSocket() {
@@ -20,25 +21,27 @@ function initSocket() {
     
     socket.on('film-rating-updated', (data) => {
         console.log('📊 Film rating updated', data);
-        if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
+        if ((currentView === 'beranda' || currentView === 'toprating') && !isRefreshing) {
+            refreshCurrentView();
+        }
         if (currentFilmId == data.filmId) updateModalRating(data);
     });
     
     socket.on('actor-added', (data) => {
         console.log('⭐ Actor added:', data.actor);
-        if (currentView === 'topactors') refreshCurrentView();
+        if (currentView === 'topactors' && !isRefreshing) refreshCurrentView();
     });
     socket.on('actor-updated', (data) => {
         console.log('📝 Actor updated:', data.actor);
-        if (currentView === 'topactors') refreshCurrentView();
+        if (currentView === 'topactors' && !isRefreshing) refreshCurrentView();
     });
     socket.on('actor-deleted', (data) => {
         console.log('🗑️ Actor deleted:', data.actorName);
-        if (currentView === 'topactors') refreshCurrentView();
+        if (currentView === 'topactors' && !isRefreshing) refreshCurrentView();
     });
     socket.on('actor-rating-updated', (data) => {
         console.log('⭐ Actor rating updated', data);
-        if (currentView === 'topactors') refreshCurrentView();
+        if (currentView === 'topactors' && !isRefreshing) refreshCurrentView();
     });
     
     socket.on('new-comment', (data) => {
@@ -50,36 +53,36 @@ function initSocket() {
     
     socket.on('data-updated', (data) => {
         console.log('🔄 Database updated');
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
     socket.on('global-refresh', () => {
         console.log('🌐 Global refresh');
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
     
     socket.on('film-added', (data) => {
         console.log('🎬 Film added:', data.film);
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
     socket.on('film-updated', (data) => {
         console.log('📝 Film updated:', data.film);
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
     socket.on('film-deleted', (data) => {
         console.log('🗑️ Film deleted:', data.filmTitle);
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
     
     socket.on('watchlist-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
-            if (currentView === 'watchlist') refreshCurrentView();
+            if (currentView === 'watchlist' && !isRefreshing) refreshCurrentView();
         }
     });
     socket.on('profile-updated', (data) => {
         if (data.userId === (currentUser || 'admin')) {
             updateUI();
         }
-        if (currentView === 'profile') refreshCurrentView();
+        if (currentView === 'profile' && !isRefreshing) refreshCurrentView();
     });
     
     socket.on('show-toast', (data) => {
@@ -91,13 +94,30 @@ function initSocket() {
     });
     socket.on('reconnect', () => {
         console.log('✅ Real-time reconnected');
-        refreshCurrentView();
+        if (!isRefreshing) refreshCurrentView();
     });
 }
 
 async function refreshCurrentView() {
+    isRefreshing = true;
+    // Simpan nilai search saat ini sebelum refresh
+    const currentSearchInput = document.getElementById("searchInput");
+    const currentSearchValue = currentSearchInput ? currentSearchInput.value : searchQuery;
+    const currentActorSearchInput = document.getElementById("actorSearch");
+    const currentActorSearchValue = currentActorSearchInput ? currentActorSearchInput.value : actorSearchQuery;
+    
     await loadData(true);
+    
+    // Kembalikan nilai search setelah refresh
+    if (currentView === "beranda" && currentSearchValue !== undefined) {
+        searchQuery = currentSearchValue;
+    }
+    if (currentView === "topactors" && currentActorSearchValue !== undefined) {
+        actorSearchQuery = currentActorSearchValue;
+    }
+    
     render();
+    isRefreshing = false;
 }
 
 function updateModalRating(data) {
@@ -153,7 +173,6 @@ async function loadData(force = false) {
             }
             updateUI();
             updateStats();
-            render();
             lastDataLoad = now;
         }
     } catch (e) {
@@ -391,11 +410,16 @@ function performSearch() {
     }
 }
 
-function clearSearch() { 
-    searchQuery = ""; 
-    const searchInput = document.getElementById("searchInput");
-    if (searchInput) searchInput.value = "";
-    renderBeranda(); 
+function handleSearchKeyPress(event) {
+    if (event.key === 'Enter') {
+        performSearch();
+    }
+}
+
+function handleActorSearchKeyPress(event) {
+    if (event.key === 'Enter') {
+        performActorSearch();
+    }
 }
 
 function performActorSearch() {
@@ -406,20 +430,13 @@ function performActorSearch() {
     }
 }
 
-function clearActorSearch() {
-    actorSearchQuery = "";
-    const actorSearch = document.getElementById("actorSearch");
-    if (actorSearch) actorSearch.value = "";
-    renderTopActors();
-}
-
 function renderBeranda() {
     let filtered = films;
     if (searchQuery) {
         filtered = films.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()));
     }
     
-        let html = `
+    let html = `
         <div class="film-slider-section">
             <h2>🔥 Film Populer</h2>
             <div class="film-slider" style="display:flex; gap:20px; overflow-x:auto; padding:10px 0;">
@@ -447,7 +464,7 @@ function renderBeranda() {
         <hr>
         <h2>🎬 Semua Film</h2>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
-            <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
+            <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;" onkeypress="handleSearchKeyPress(event)">
             <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 30px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
         </div>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
@@ -474,6 +491,12 @@ function renderBeranda() {
         ${filtered.length === 0 ? '<p style="text-align:center;padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
     `;
     document.getElementById("mainContent").innerHTML = html;
+    
+    // Set focus kembali ke search input jika ada
+    const searchInput = document.getElementById("searchInput");
+    if (searchInput && document.activeElement !== searchInput) {
+        // Jangan auto-focus, biarkan user yang memilih
+    }
 }
 
 function renderTopRating() {
@@ -538,7 +561,7 @@ function renderTopActors() {
         <h2>⭐ Top Aktor</h2>
         <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas</p>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
-            <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
+            <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;" onkeypress="handleActorSearchKeyPress(event)">
             <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 30px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
             ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Tambah Aktor</button>` : ''}
         </div>
@@ -1191,7 +1214,8 @@ window.resolveReport = resolveReport;
 window.changeView = changeView;
 window.performSearch = performSearch;
 window.performActorSearch = performActorSearch;
-window.clearActorSearch = clearActorSearch;
+window.handleSearchKeyPress = handleSearchKeyPress;
+window.handleActorSearchKeyPress = handleActorSearchKeyPress;
 
 // ==================== START APP ====================
 initSocket();
@@ -1199,5 +1223,11 @@ loadData();
 initNav();
 
 setInterval(async () => {
-    await loadData(true);
+    if (!isRefreshing) {
+        await loadData(true);
+        if (currentView === "beranda" || currentView === "topactors") {
+            // Refresh tampilan tanpa mengganggu fokus
+            render();
+        }
+    }
 }, 3000);
