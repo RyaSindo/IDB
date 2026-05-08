@@ -158,25 +158,61 @@ async function loadData(force = false) {
         
         if (data.error) {
             console.error('Server error:', data.error);
-            showToast("Error server: " + data.message, "error");
+            showToast("Error server: " + (data.message || 'Unknown error'), "error");
             return;
         }
         
-        console.log('Data received:', {
-            films: data.films?.length || 0,
-            ratings: data.ratings?.length || 0,
-            users: data.users?.length || 0
-        });
+        // Sanitasi data - konversi semua ObjectId ke string
+        users = (data.users || []).map(u => ({
+            ...u,
+            _id: String(u._id)
+        }));
         
-        users = data.users || [];
         admins = data.admins || [];
-        films = (data.films || []).map(film => ({ ...film, id: film._id }));
-        ratings = data.ratings || [];
-        watchlist = data.watchlist || [];
+        
+        films = (data.films || []).map(film => ({ 
+            ...film, 
+            id: String(film._id),
+            _id: String(film._id)
+        }));
+        
+        ratings = (data.ratings || []).map(r => ({
+            ...r,
+            filmId: r.filmId ? String(r.filmId) : null,
+            userId: r.userId ? String(r.userId) : null
+        }));
+        
+        watchlist = (data.watchlist || []).map(w => ({
+            ...w,
+            userId: w.userId ? String(w.userId) : null,
+            filmId: w.filmId ? String(w.filmId) : null
+        }));
+        
         userProfiles = data.userProfiles || {};
-        reports = data.reports || [];
-        actors = (data.actors || []).map(a => ({ ...a, id: a._id }));
-        actorRatingsByUser = data.actorRatingsByUser || [];
+        
+        reports = (data.reports || []).map(r => ({
+            ...r,
+            _id: String(r._id),
+            filmId: r.filmId ? String(r.filmId) : null,
+            reportedUserId: r.reportedUserId ? String(r.reportedUserId) : null
+        }));
+        
+        actors = (data.actors || []).map(a => ({ 
+            ...a, 
+            id: String(a._id),
+            _id: String(a._id)
+        }));
+        
+        actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({
+            ...ar,
+            userId: ar.userId ? String(ar.userId) : null
+        }));
+        
+        console.log('Data loaded successfully:', {
+            films: films.length,
+            ratings: ratings.length,
+            users: users.length
+        });
         
         if (currentToken) {
             const session = await apiCall('/api/session', { headers: { 'Authorization': currentToken } });
@@ -212,33 +248,53 @@ function escapeHtml(str) {
 }
 
 function getProfile(id) {
-    if (!userProfiles[id]) userProfiles[id] = { displayName: id === "admin" ? "Administrator" : id, avatarValue: null, bio: "Pecinta film 🎬", top3Films: [] };
-    return userProfiles[id];
+    const idStr = String(id);
+    if (!userProfiles[idStr]) {
+        userProfiles[idStr] = { 
+            displayName: idStr === "admin" ? "Administrator" : idStr, 
+            avatarValue: null, 
+            bio: "Pecinta film 🎬", 
+            top3Films: [] 
+        };
+    }
+    return userProfiles[idStr];
 }
 
 function getDisplayNameFromObjectId(userId) {
     if (!userId) return 'Unknown';
-    const user = users.find(u => u._id === userId || u._id.toString() === userId.toString());
+    // Pastikan userId adalah string yang aman
+    const userIdStr = String(userId);
+    const user = users.find(u => {
+        const uId = String(u._id);
+        return uId === userIdStr;
+    });
     if (user) return user.displayName || user.username;
-    const profile = userProfiles[userId];
+    const profile = userProfiles[userIdStr];
     if (profile) return profile.displayName;
-    if (userId === 'admin' || userId.toString() === 'admin') return 'Administrator';
+    if (userIdStr === 'admin') return 'Administrator';
     return 'Unknown User';
 }
 
 function getAvgRating(fid) {
     if (!fid) return null;
-    const fidStr = fid.toString();
-    const fr = ratings.filter(r => r.filmId && r.filmId.toString() === fidStr);
+    const fidStr = String(fid);
+    const fr = ratings.filter(r => {
+        const rFid = r.filmId ? String(r.filmId) : '';
+        return rFid === fidStr;
+    });
     if (fr.length === 0) return null;
     return (fr.reduce((a, b) => a + b.rating, 0) / fr.length).toFixed(1);
 }
 
 function getUserRating(fid, uid) {
     if (!fid || !uid) return null;
-    const fidStr = fid.toString();
-    const uidStr = uid.toString();
-    return ratings.find(r => r.filmId && r.filmId.toString() === fidStr && r.userId && r.userId.toString() === uidStr);
+    const fidStr = String(fid);
+    const uidStr = String(uid);
+    return ratings.find(r => {
+        const rFid = r.filmId ? String(r.filmId) : '';
+        const rUid = r.userId ? String(r.userId) : '';
+        return rFid === fidStr && rUid === uidStr;
+    });
 }
 
 function getTopActors() {
@@ -252,15 +308,23 @@ function getTopActors() {
         ...a,
         avgRating: map[a.name] ? (map[a.name].total / map[a.name].count).toFixed(1) : "0.0",
         ratingCount: map[a.name]?.count || 0,
-        userRating: actorRatingsByUser.find(r => r.actorName === a.name && r.userId === (isAdminLoggedIn ? "admin" : currentUser))
+        userRating: actorRatingsByUser.find(r => {
+            const rUserId = r.userId ? String(r.userId) : '';
+            const targetId = isAdminLoggedIn ? "admin" : String(currentUser || '');
+            return r.actorName === a.name && rUserId === targetId;
+})
     })).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating));
 }
 
 function isInWatchlist(uid, fid) {
     if (!uid || !fid) return false;
-    const uidStr = uid.toString();
-    const fidStr = fid.toString();
-    return watchlist.some(w => w.userId && w.userId.toString() === uidStr && w.filmId && w.filmId.toString() === fidStr);
+    const uidStr = String(uid);
+    const fidStr = String(fid);
+    return watchlist.some(w => {
+        const wUid = w.userId ? String(w.userId) : '';
+        const wFid = w.filmId ? String(w.filmId) : '';
+        return wUid === uidStr && wFid === fidStr;
+    });
 }
 
 // ======================= AUTH =======================
