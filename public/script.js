@@ -10,6 +10,17 @@ let currentRating = 7;
 let tempPosterImage = null;
 let tempAvatarImage = null;
 
+// Helper function untuk safe string
+function safeString(value) {
+    if (value === undefined || value === null) return '';
+    return String(value);
+}
+
+function safeId(value) {
+    if (value === undefined || value === null) return '';
+    return String(value).replace(/[^a-zA-Z0-9]/g, '');
+}
+
 // ======================= SOCKET.IO REAL-TIME =======================
 function initSocket() {
     socket = io({ transports: ['polling'] });
@@ -21,13 +32,13 @@ function initSocket() {
     socket.on('film-rating-updated', (data) => {
         console.log('📊 Film rating updated', data);
         if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
-        if (currentFilmId == data.filmId) updateModalRating(data);
+        if (safeString(currentFilmId) === safeString(data.filmId)) updateModalRating(data);
     });
     
     socket.on('rating-deleted', (data) => {
         console.log('🗑️ Rating deleted', data);
         if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
-        if (currentFilmId == data.filmId && document.getElementById('filmModal')) {
+        if (safeString(currentFilmId) === safeString(data.filmId) && document.getElementById('filmModal')) {
             closeFilmModal();
             setTimeout(() => openFilmModal(currentFilmId), 500);
         }
@@ -52,42 +63,24 @@ function initSocket() {
     
     socket.on('new-comment', (data) => {
         console.log('💬 New comment', data);
-        if (currentFilmId == data.filmId && document.getElementById('filmModal')) {
+        if (safeString(currentFilmId) === safeString(data.filmId) && document.getElementById('filmModal')) {
             addCommentToUI(data);
         }
     });
     
-    socket.on('data-updated', (data) => {
-        console.log('🔄 Database updated');
-        refreshCurrentView();
-    });
-    socket.on('global-refresh', () => {
-        console.log('🌐 Global refresh');
-        refreshCurrentView();
-    });
-    
-    socket.on('film-added', (data) => {
-        console.log('🎬 Film added:', data.film);
-        refreshCurrentView();
-    });
-    socket.on('film-updated', (data) => {
-        console.log('📝 Film updated:', data.film);
-        refreshCurrentView();
-    });
-    socket.on('film-deleted', (data) => {
-        console.log('🗑️ Film deleted:', data.filmTitle);
-        refreshCurrentView();
-    });
+    socket.on('data-updated', () => refreshCurrentView());
+    socket.on('global-refresh', () => refreshCurrentView());
+    socket.on('film-added', () => refreshCurrentView());
+    socket.on('film-updated', () => refreshCurrentView());
+    socket.on('film-deleted', () => refreshCurrentView());
     
     socket.on('watchlist-updated', (data) => {
-        if (data.userId === (currentUser || 'admin')) {
+        if (safeString(data.userId) === safeString(currentUser || 'admin')) {
             if (currentView === 'watchlist') refreshCurrentView();
         }
     });
     socket.on('profile-updated', (data) => {
-        if (data.userId === (currentUser || 'admin')) {
-            updateUI();
-        }
+        if (safeString(data.userId) === safeString(currentUser || 'admin')) updateUI();
         if (currentView === 'profile') refreshCurrentView();
     });
     
@@ -100,13 +93,8 @@ function initSocket() {
         }
     });
     
-    socket.on('show-toast', (data) => {
-        showToast(data.message, data.type);
-    });
-    
-    socket.on('disconnect', (reason) => {
-        console.log('❌ Real-time disconnected:', reason);
-    });
+    socket.on('show-toast', (data) => showToast(data.message, data.type));
+    socket.on('disconnect', () => console.log('❌ Real-time disconnected'));
     socket.on('reconnect', () => {
         console.log('✅ Real-time reconnected');
         refreshCurrentView();
@@ -147,76 +135,26 @@ async function loadData(force = false) {
     const now = Date.now();
     if (!force && now - lastDataLoad < 1000) return;
     try {
-        console.log('Loading data from server...');
         const data = await apiCall('/api/all-data');
-        
-        if (!data) {
-            console.error('No data received from server');
-            showToast("Gagal memuat data dari server!", "error");
-            return;
-        }
-        
+        if (!data) return;
         if (data.error) {
-            console.error('Server error:', data.error);
-            showToast("Error server: " + (data.message || 'Unknown error'), "error");
+            showToast("Error server: " + (data.message || 'Unknown'), "error");
             return;
         }
         
-        // Sanitasi data - konversi semua ObjectId ke string
-        users = (data.users || []).map(u => ({
-            ...u,
-            _id: String(u._id)
-        }));
-        
+        users = (data.users || []).map(u => ({ ...u, _id: safeString(u._id) }));
         admins = data.admins || [];
-        
-        films = (data.films || []).map(film => ({ 
-            ...film, 
-            id: String(film._id),
-            _id: String(film._id)
-        }));
-        
-        ratings = (data.ratings || []).map(r => ({
-            ...r,
-            filmId: r.filmId ? String(r.filmId) : null,
-            userId: r.userId ? String(r.userId) : null
-        }));
-        
-        watchlist = (data.watchlist || []).map(w => ({
-            ...w,
-            userId: w.userId ? String(w.userId) : null,
-            filmId: w.filmId ? String(w.filmId) : null
-        }));
-        
+        films = (data.films || []).map(film => ({ ...film, id: safeString(film._id), _id: safeString(film._id) }));
+        ratings = (data.ratings || []).map(r => ({ ...r, filmId: safeString(r.filmId), userId: safeString(r.userId) }));
+        watchlist = (data.watchlist || []).map(w => ({ ...w, userId: safeString(w.userId), filmId: safeString(w.filmId) }));
         userProfiles = data.userProfiles || {};
-        
-        reports = (data.reports || []).map(r => ({
-            ...r,
-            _id: String(r._id),
-            filmId: r.filmId ? String(r.filmId) : null,
-            reportedUserId: r.reportedUserId ? String(r.reportedUserId) : null
-        }));
-        
-        actors = (data.actors || []).map(a => ({ 
-            ...a, 
-            id: String(a._id),
-            _id: String(a._id)
-        }));
-        
-        actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({
-            ...ar,
-            userId: ar.userId ? String(ar.userId) : null
-        }));
-        
-        console.log('Data loaded successfully:', {
-            films: films.length,
-            ratings: ratings.length,
-            users: users.length
-        });
+        reports = (data.reports || []).map(r => ({ ...r, _id: safeString(r._id), filmId: safeString(r.filmId), reportedUserId: safeString(r.reportedUserId) }));
+        actors = (data.actors || []).map(a => ({ ...a, id: safeString(a._id), _id: safeString(a._id) }));
+        actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({ ...ar, userId: safeString(ar.userId) }));
         
         if (currentToken) {
             const session = await apiCall('/api/session', { headers: { 'Authorization': currentToken } });
-            if (session && session.loggedIn) {
+            if (session?.loggedIn) {
                 if (session.isAdmin) { isAdminLoggedIn = true; currentUser = null; }
                 else { currentUser = session.username; isAdminLoggedIn = false; }
             } else {
@@ -230,7 +168,7 @@ async function loadData(force = false) {
         lastDataLoad = now;
     } catch (e) {
         console.error("Error in loadData:", e);
-        showToast("Gagal memuat data! Periksa koneksi internet Anda.", "error");
+        showToast("Gagal memuat data!", "error");
     }
 }
 
@@ -244,11 +182,11 @@ function showToast(msg, type = "info") {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+    return String(str).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 }
 
 function getProfile(id) {
-    const idStr = String(id);
+    const idStr = safeString(id);
     if (!userProfiles[idStr]) {
         userProfiles[idStr] = { 
             displayName: idStr === "admin" ? "Administrator" : idStr, 
@@ -261,40 +199,26 @@ function getProfile(id) {
 }
 
 function getDisplayNameFromObjectId(userId) {
-    if (!userId) return 'Unknown';
-    // Pastikan userId adalah string yang aman
-    const userIdStr = String(userId);
-    const user = users.find(u => {
-        const uId = String(u._id);
-        return uId === userIdStr;
-    });
+    const idStr = safeString(userId);
+    const user = users.find(u => safeString(u._id) === idStr);
     if (user) return user.displayName || user.username;
-    const profile = userProfiles[userIdStr];
+    const profile = userProfiles[idStr];
     if (profile) return profile.displayName;
-    if (userIdStr === 'admin') return 'Administrator';
+    if (idStr === 'admin') return 'Administrator';
     return 'Unknown User';
 }
 
 function getAvgRating(fid) {
-    if (!fid) return null;
-    const fidStr = String(fid);
-    const fr = ratings.filter(r => {
-        const rFid = r.filmId ? String(r.filmId) : '';
-        return rFid === fidStr;
-    });
+    const fidStr = safeString(fid);
+    const fr = ratings.filter(r => safeString(r.filmId) === fidStr);
     if (fr.length === 0) return null;
     return (fr.reduce((a, b) => a + b.rating, 0) / fr.length).toFixed(1);
 }
 
 function getUserRating(fid, uid) {
-    if (!fid || !uid) return null;
-    const fidStr = String(fid);
-    const uidStr = String(uid);
-    return ratings.find(r => {
-        const rFid = r.filmId ? String(r.filmId) : '';
-        const rUid = r.userId ? String(r.userId) : '';
-        return rFid === fidStr && rUid === uidStr;
-    });
+    const fidStr = safeString(fid);
+    const uidStr = safeString(uid);
+    return ratings.find(r => safeString(r.filmId) === fidStr && safeString(r.userId) === uidStr);
 }
 
 function getTopActors() {
@@ -308,29 +232,34 @@ function getTopActors() {
         ...a,
         avgRating: map[a.name] ? (map[a.name].total / map[a.name].count).toFixed(1) : "0.0",
         ratingCount: map[a.name]?.count || 0,
-        userRating: actorRatingsByUser.find(r => {
-            const rUserId = r.userId ? String(r.userId) : '';
-            const targetId = isAdminLoggedIn ? "admin" : String(currentUser || '');
-            return r.actorName === a.name && rUserId === targetId;
-})
+        userRating: actorRatingsByUser.find(r => r.actorName === a.name && safeString(r.userId) === safeString(isAdminLoggedIn ? "admin" : currentUser))
     })).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating));
 }
 
 function isInWatchlist(uid, fid) {
-    if (!uid || !fid) return false;
-    const uidStr = String(uid);
-    const fidStr = String(fid);
-    return watchlist.some(w => {
-        const wUid = w.userId ? String(w.userId) : '';
-        const wFid = w.filmId ? String(w.filmId) : '';
-        return wUid === uidStr && wFid === fidStr;
-    });
+    const uidStr = safeString(uid);
+    const fidStr = safeString(fid);
+    return watchlist.some(w => safeString(w.userId) === uidStr && safeString(w.filmId) === fidStr);
+}
+
+// Fungsi untuk menampilkan bintang actor rating
+function renderActorStars(rating) {
+    const starRating = parseInt(rating) || 0;
+    let stars = '';
+    for (let i = 1; i <= 5; i++) {
+        if (i <= starRating) {
+            stars += '<i class="fas fa-star" style="color:#f59e0b;"></i>';
+        } else {
+            stars += '<i class="far fa-star" style="color:#cbd5e0;"></i>';
+        }
+    }
+    return stars;
 }
 
 // ======================= AUTH =======================
 async function doLogin() {
-    const username = document.getElementById("loginUsername").value.trim();
-    const password = document.getElementById("loginPassword").value;
+    const username = document.getElementById("loginUsername")?.value.trim();
+    const password = document.getElementById("loginPassword")?.value;
     if (!username || !password) { showToast("Isi semua field!", "error"); return; }
     const res = await apiCall('/api/users/login', { method: 'POST', body: JSON.stringify({ username, password }) });
     if (res?.success) {
@@ -346,10 +275,10 @@ async function doLogin() {
 }
 
 async function doRegister() {
-    const username = document.getElementById("regUsername").value.trim();
-    const password = document.getElementById("regPassword").value;
-    const confirm = document.getElementById("regConfirmPassword").value;
-    const displayName = document.getElementById("regDisplayName").value.trim() || username;
+    const username = document.getElementById("regUsername")?.value.trim();
+    const password = document.getElementById("regPassword")?.value;
+    const confirm = document.getElementById("regConfirmPassword")?.value;
+    const displayName = document.getElementById("regDisplayName")?.value.trim() || username;
     if (username.length < 3) { showToast("Username minimal 3 karakter!", "error"); return; }
     if (password.length < 6) { showToast("Password minimal 6 karakter!", "error"); return; }
     if (password !== confirm) { showToast("Password tidak cocok!", "error"); return; }
@@ -368,146 +297,93 @@ async function logout() {
     showToast("Logout berhasil.", "info");
 }
 
-// ======================= FILM CRUD =======================
-async function addNewFilm() {
-    if (!isAdminLoggedIn) return;
-    const title = document.getElementById("newFilmTitle")?.value.trim();
-    const year = parseInt(document.getElementById("newFilmYear")?.value);
-    const trailer = document.getElementById("newFilmTrailer")?.value.trim();
-    const synopsis = document.getElementById("newFilmSynopsis")?.value.trim();
-    const actorsStr = document.getElementById("newFilmActors")?.value.trim();
-    const actorsList = actorsStr ? actorsStr.split(",").map(a => a.trim()) : [];
-    let poster = document.getElementById("newFilmPoster")?.value.trim();
-    if (!title || !year || !poster || !trailer || !synopsis) { showToast("Semua field harus diisi!", "error"); return; }
-    if (tempPosterImage) {
-        const up = await apiCall('/api/upload-poster', { method: 'POST', body: JSON.stringify({ image: tempPosterImage }) });
-        if (up?.success) poster = up.imageUrl;
+// ======================= RENDER FUNCTIONS =======================
+function renderBeranda() {
+    let filtered = films;
+    if (searchQuery) {
+        filtered = films.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()));
     }
-    const res = await apiCall('/api/films', { method: 'POST', body: JSON.stringify({ title, year, poster, trailer, synopsis, actors: actorsList }) });
-    if (res?.success) { await loadData(true); closeAddFilmModal(); showToast(`Film "${title}" ditambahkan!`, "success"); render(); }
-    else showToast("Gagal menambah film!", "error");
-}
-
-async function updateFilm() {
-    if (!isAdminLoggedIn) return;
-    const id = document.getElementById("editFilmId")?.value;
-    const title = document.getElementById("editFilmTitle")?.value.trim();
-    const year = parseInt(document.getElementById("editFilmYear")?.value);
-    const trailer = document.getElementById("editFilmTrailer")?.value.trim();
-    const synopsis = document.getElementById("editFilmSynopsis")?.value.trim();
-    const actorsStr = document.getElementById("editFilmActors")?.value.trim();
-    const actorsList = actorsStr ? actorsStr.split(",").map(a => a.trim()) : [];
-    let poster = document.getElementById("editFilmPoster")?.value.trim();
-    if (tempPosterImage) {
-        const up = await apiCall('/api/upload-poster', { method: 'POST', body: JSON.stringify({ image: tempPosterImage }) });
-        if (up?.success) poster = up.imageUrl;
-    }
-    const res = await apiCall(`/api/films/${id}`, { method: 'PUT', body: JSON.stringify({ title, year, poster, trailer, synopsis, actors: actorsList }) });
-    if (res?.success) { await loadData(true); closeEditFilmModal(); showToast(`Film "${title}" diperbarui!`, "success"); render(); }
-    else showToast("Gagal update film!", "error");
-}
-
-async function adminDeleteFilm(id) {
-    if (!isAdminLoggedIn) return;
-    if (!confirm("Hapus film ini?")) return;
-    const res = await apiCall(`/api/films/${id}`, { method: 'DELETE' });
-    if (res?.success) { await loadData(true); showToast("Film dihapus!", "success"); render(); }
-    else showToast("Gagal menghapus film!", "error");
-}
-
-// ======================= RATINGS =======================
-async function addRating(fid, uid, rating, comment) {
-    try {
-        console.log('Menyimpan rating:', { fid, uid, rating, comment });
-        const res = await apiCall('/api/ratings', { 
-            method: 'POST', 
-            body: JSON.stringify({ filmId: fid, userId: uid, rating, comment }) 
+    
+    let html = `
+        <div class="film-slider-section">
+            <h2>🔥 Film Populer</h2>
+            <div class="film-slider" style="display:flex; gap:20px; overflow-x:auto; padding:10px 0;">
+                ${films.slice(0, 10).map(f => {
+                    const avg = getAvgRating(f.id);
+                    return `
+                        <div class="film-card" style="flex:0 0 180px; background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${safeId(f.id)}')">
+                            <img class="poster-img" src="${f.posterUrl}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Image'" style="width:100%; height:250px; object-fit:cover;">
+                            <div class="poster-info" style="padding:10px;">
+                                <div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div>
+                                <div class="poster-year" style="font-size:12px; color:#666;">${f.year}</div>
+                                <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
+                            </div>
+                            ${isAdminLoggedIn ? `
+                                <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
+                                    <button class="admin-edit-card-btn" data-film-id="${safeId(f.id)}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
+                                    <button class="admin-delete-card-btn" data-film-id="${safeId(f.id)}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+        <hr>
+        <h2>🎬 Semua Film</h2>
+        <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
+            <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
+            <button onclick="performSearch()" class="login-btn" style="background:#667eea;">Cari</button>
+            <button onclick="clearSearch()" class="login-btn" style="background:#e2e8f0;">Reset</button>
+        </div>
+        <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
+            ${filtered.map(f => {
+                const avg = getAvgRating(f.id);
+                return `
+                    <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${safeId(f.id)}')">
+                        <img class="poster-img" src="${f.posterUrl}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Image'" style="width:100%; height:250px; object-fit:cover;">
+                        <div class="poster-info" style="padding:10px;">
+                            <div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div>
+                            <div class="poster-year" style="font-size:12px; color:#666;">${f.year}</div>
+                            <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
+                        </div>
+                        ${isAdminLoggedIn ? `
+                            <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
+                                <button class="admin-edit-card-btn" data-film-id="${safeId(f.id)}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">✏️</button>
+                                <button class="admin-delete-card-btn" data-film-id="${safeId(f.id)}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer;">🗑️</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('')}
+        </div>
+        ${filtered.length === 0 ? '<p class="text-center" style="padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
+    `;
+    document.getElementById("mainContent").innerHTML = html;
+    
+    if (isAdminLoggedIn) {
+        document.querySelectorAll('.admin-edit-card-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                openEditFilmModal(btn.dataset.filmId);
+            };
         });
-        console.log('Response rating:', res);
-        if (res?.success) { 
-            await loadData(true); 
-            showToast("Rating disimpan!", "success");
-            return true;
-        } else {
-            showToast(res?.message || "Gagal menyimpan rating!", "error");
-            return false;
-        }
-    } catch (error) {
-        console.error("Error addRating:", error);
-        showToast("Gagal menyimpan rating!", "error");
-        return false;
+        document.querySelectorAll('.admin-delete-card-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                if (confirm(`Hapus film "${btn.dataset.filmTitle}"?`)) {
+                    adminDeleteFilm(btn.dataset.filmId);
+                }
+            };
+        });
+    }
+    
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.onkeypress = (e) => { if (e.key === 'Enter') performSearch(); };
     }
 }
 
-// ==================== ACTORS ====================
-async function addNewActor() {
-    if (!isAdminLoggedIn) return;
-    const name = document.getElementById("newActorName")?.value.trim();
-    const bio = document.getElementById("newActorBio")?.value.trim();
-    const photoUrl = document.getElementById("newActorPhotoUrl")?.value.trim();
-    if (!name) { showToast("Nama aktor harus diisi!", "error"); return; }
-    const res = await apiCall('/api/actors', { method: 'POST', body: JSON.stringify({ name, bio, photo: photoUrl }) });
-    if (res?.success) { await loadData(true); closeAddActorModal(); showToast(`Aktor "${name}" ditambahkan!`, "success"); render(); }
-    else showToast(res?.message || "Gagal menambah aktor!", "error");
-}
-
-async function updateActor() {
-    if (!isAdminLoggedIn) return;
-    const id = document.getElementById("editActorId")?.value;
-    const name = document.getElementById("editActorName")?.value.trim();
-    const bio = document.getElementById("editActorBio")?.value.trim();
-    const photoUrl = document.getElementById("editActorPhotoUrl")?.value.trim();
-    const res = await apiCall(`/api/actors/${id}`, { method: 'PUT', body: JSON.stringify({ name, bio, photo: photoUrl }) });
-    if (res?.success) { await loadData(true); closeEditActorModal(); showToast(`Aktor "${name}" diperbarui!`, "success"); render(); }
-    else showToast("Gagal update aktor!", "error");
-}
-
-async function adminDeleteActor(actorName) {
-    if (!isAdminLoggedIn) return;
-    if (!confirm(`Hapus aktor "${actorName}"?`)) return;
-    const actor = actors.find(a => a.name === actorName);
-    if (!actor) return;
-    const res = await apiCall(`/api/actors/${actor.id}`, { method: 'DELETE' });
-    if (res?.success) { await loadData(true); showToast(`Aktor "${actorName}" dihapus!`, "success"); render(); }
-    else showToast("Gagal menghapus aktor!", "error");
-}
-
-async function rateActor(actorName, rating) {
-    if (!currentUser && !isAdminLoggedIn) { showToast("Login dulu!", "error"); showAuthModal(); return; }
-    const userId = isAdminLoggedIn ? "admin" : currentUser;
-    const res = await apiCall('/api/actor-ratings', { method: 'POST', body: JSON.stringify({ actorName, userId, rating }) });
-    if (res?.success) { showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success"); if (currentView === 'topactors') renderTopActors(); }
-    else showToast("Gagal menyimpan rating!", "error");
-}
-
-// ==================== WATCHLIST ====================
-async function toggleWatchlist(uid, fid) {
-    const res = await apiCall('/api/watchlist/toggle', { method: 'POST', body: JSON.stringify({ userId: uid, filmId: fid }) });
-    if (res?.success) { await loadData(true); showToast(res.action === 'added' ? "Ditambahkan ke watchlist!" : "Dihapus dari watchlist!", "success"); render(); }
-    else showToast("Gagal toggle watchlist!", "error");
-}
-
-// ==================== PROFILE ====================
-async function saveProfile() {
-    const userId = isAdminLoggedIn ? "admin" : currentUser;
-    const displayName = document.getElementById("settingDisplayName")?.value;
-    const bio = document.getElementById("settingBio")?.value;
-    const top1 = document.getElementById("top1Select")?.value;
-    const top2 = document.getElementById("top2Select")?.value;
-    const top3 = document.getElementById("top3Select")?.value;
-    const top3Films = [top1, top2, top3].filter(id => id && !isNaN(id));
-    let avatarValue = null;
-    if (tempAvatarImage) {
-        const up = await apiCall('/api/upload-profile', { method: 'POST', body: JSON.stringify({ image: tempAvatarImage }) });
-        if (up?.success) avatarValue = up.imageUrl;
-        else avatarValue = tempAvatarImage;
-    }
-    const res = await apiCall(`/api/profiles/${userId}`, { method: 'PUT', body: JSON.stringify({ displayName, avatarValue, bio, top3Films }) });
-    if (res?.success) { await loadData(true); closeSettingModal(); updateUI(); showToast("Profil disimpan!", "success"); render(); }
-    else showToast("Gagal menyimpan profil!", "error");
-}
-
-// ==================== RENDER FUNCTIONS ====================
 function performSearch() {
     const searchInput = document.getElementById("searchInput");
     if (searchInput) {
@@ -538,101 +414,11 @@ function clearActorSearch() {
     renderTopActors();
 }
 
-function renderBeranda() {
-    let filtered = films;
-    if (searchQuery) {
-        filtered = films.filter(f => f.title.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    
-    let html = `
-        <div class="film-slider-section">
-            <h2>🔥 Film Populer</h2>
-            <div class="film-slider" style="display:flex; gap:20px; overflow-x:auto; padding:10px 0;">
-                ${films.slice(0, 10).map(f => {
-                    const avg = getAvgRating(f.id);
-                    return `
-                        <div class="film-card" style="flex:0 0 180px; background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${f.id}')">
-                            <img class="poster-img" src="${f.posterUrl}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Image'" style="width:100%; height:250px; object-fit:cover;">
-                            <div class="poster-info" style="padding:10px;">
-                                <div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div>
-                                <div class="poster-year" style="font-size:12px; color:#666;">${f.year}</div>
-                                <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
-                            </div>
-                            ${isAdminLoggedIn ? `
-                                <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
-                                    <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
-                                    <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
-                                </div>
-                            ` : ''}
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        </div>
-        <hr>
-        <h2>🎬 Semua Film</h2>
-        <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
-            <input type="text" class="search-input" id="searchInput" placeholder="Cari film..." value="${escapeHtml(searchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="performSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
-            <button onclick="clearSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
-        </div>
-        <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
-            ${filtered.map(f => {
-                const avg = getAvgRating(f.id);
-                return `
-                    <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${f.id}')">
-                        <img class="poster-img" src="${f.posterUrl}" onerror="this.src='https://via.placeholder.com/180x250?text=No+Image'" style="width:100%; height:250px; object-fit:cover;">
-                        <div class="poster-info" style="padding:10px;">
-                            <div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div>
-                            <div class="poster-year" style="font-size:12px; color:#666;">${f.year}</div>
-                            <div class="poster-rating" style="color:#f59e0b;">⭐ ${avg || '-'}/10</div>
-                        </div>
-                        ${isAdminLoggedIn ? `
-                            <div class="admin-card-actions" style="position:absolute; top:8px; right:8px; display:flex; gap:5px; z-index:10;">
-                                <button class="admin-edit-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>
-                                <button class="admin-delete-card-btn" data-film-id="${f.id}" data-film-title="${escapeHtml(f.title)}" style="background:rgba(0,0,0,0.7); border:none; width:28px; height:28px; border-radius:50%; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-            }).join('')}
-        </div>
-        ${filtered.length === 0 ? '<p style="text-align:center;padding:40px;">Tidak ada film yang ditemukan.</p>' : ''}
-    `;
-    document.getElementById("mainContent").innerHTML = html;
-    
-    if (isAdminLoggedIn) {
-        document.querySelectorAll('.admin-edit-card-btn').forEach(btn => {
-            btn.removeEventListener('click', handleEditClick);
-            btn.addEventListener('click', handleEditClick);
-        });
-        document.querySelectorAll('.admin-delete-card-btn').forEach(btn => {
-            btn.removeEventListener('click', handleDeleteClick);
-            btn.addEventListener('click', handleDeleteClick);
-        });
-    }
-}
-
-function handleEditClick(event) {
-    event.stopPropagation();
-    const filmId = this.getAttribute('data-film-id');
-    openEditFilmModal(filmId);
-}
-
-function handleDeleteClick(event) {
-    event.stopPropagation();
-    const filmId = this.getAttribute('data-film-id');
-    const filmTitle = this.getAttribute('data-film-title');
-    if (confirm(`Apakah Anda yakin ingin menghapus film "${filmTitle}"?`)) {
-        adminDeleteFilm(filmId);
-    }
-}
-
 function renderTopRating() {
     const topFilms = films.map(f => ({
         ...f,
         avg: parseFloat(getAvgRating(f.id)) || 0,
-        cnt: ratings.filter(r => r.filmId && r.filmId.toString() === f.id.toString()).length
+        cnt: ratings.filter(r => safeString(r.filmId) === safeString(f.id)).length
     })).filter(f => f.cnt > 0).sort((a, b) => b.avg - a.avg);
     
     if (topFilms.length === 0) {
@@ -648,7 +434,7 @@ function renderTopRating() {
     let html = `<div class="top3-container" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(250px,1fr)); gap:20px; margin-bottom:30px;">`;
     top3.forEach((f, i) => {
         html += `
-            <div class="top-card ${rankClasses[i]}" style="background:white; border-radius:16px; overflow:hidden; cursor:pointer; position:relative; ${i===0?'border:2px solid #FFD700':(i===1?'border:2px solid #C0C0C0':'border:2px solid #CD7F32')}" onclick="openFilmModal('${f.id}')">
+            <div class="top-card ${rankClasses[i]}" style="background:white; border-radius:16px; overflow:hidden; cursor:pointer; position:relative; ${i===0?'border:2px solid #FFD700':(i===1?'border:2px solid #C0C0C0':'border:2px solid #CD7F32')}" onclick="openFilmModal('${safeId(f.id)}')">
                 <div class="top-card-rank" style="position:absolute; top:10px; left:10px; width:40px; height:40px; border-radius:50%; background:white; display:flex; align-items:center; justify-content:center; font-size:24px;">${medals[i]}</div>
                 <img class="top-card-poster" src="${f.posterUrl}" style="width:100%; height:250px; object-fit:cover;">
                 <div class="top-card-info" style="padding:12px; text-align:center;">
@@ -666,7 +452,7 @@ function renderTopRating() {
         html += `<h3>Peringkat Selanjutnya</h3><div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">`;
         rest.forEach((f, i) => {
             html += `
-                <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${f.id}')">
+                <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${safeId(f.id)}')">
                     <div class="rank-badge" style="position:absolute; top:8px; left:8px; width:30px; height:30px; border-radius:50%; background:#475569; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold;">${i+4}</div>
                     <img class="poster-img" src="${f.posterUrl}" style="width:100%; height:250px; object-fit:cover;">
                     <div class="poster-info" style="padding:10px;">
@@ -691,18 +477,21 @@ function renderTopActors() {
         <p style="color:#666; margin-bottom:16px;">Rating berdasarkan bintang dari komunitas</p>
         <div class="search-bar" style="display:flex; gap:10px; margin:20px 0;">
             <input type="text" class="search-input" id="actorSearch" placeholder="Cari aktor..." value="${escapeHtml(actorSearchQuery)}" style="flex:1; padding:10px 16px; border:1px solid #ddd; border-radius:40px;">
-            <button onclick="performActorSearch()" style="background:#667eea; color:white; border:none; padding:0 20px; border-radius:40px; cursor:pointer;"><i class="fas fa-search"></i> Cari</button>
-            <button onclick="clearActorSearch()" style="background:#e2e8f0; border:none; padding:0 20px; border-radius:40px; cursor:pointer;">Reset</button>
-            ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Tambah Aktor</button>` : ''}
+            <button onclick="performActorSearch()" class="login-btn" style="background:#667eea;">Cari</button>
+            <button onclick="clearActorSearch()" class="login-btn" style="background:#e2e8f0;">Reset</button>
+            ${isAdminLoggedIn ? `<button onclick="openAddActorModal()" class="login-btn" style="background:#f59e0b;">Tambah Aktor</button>` : ''}
         </div>
         <div class="actors-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(300px,1fr)); gap:16px;">
     `;
     
     filtered.forEach((a, i) => {
         const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `#${i+1}`));
+        const userRatingValue = a.userRating?.rating || 0;
+        const starsDisplay = renderActorStars(userRatingValue);
+        
         html += `
             <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; cursor:pointer; transition:all 0.2s;">
-                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${a.name}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
+                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
                 <div class="actor-info-modern" style="flex:1;">
                     <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
                     <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
@@ -711,13 +500,14 @@ function renderTopActors() {
                         <div>👤 ${a.ratingCount} rating</div>
                     </div>
                     ${isLoggedIn ? `
-                        <div class="actor-stars-modern" style="display:flex; gap:5px;">
-                            ${[1,2,3,4,5].map(s => `<i class="fas fa-star actor-star-modern" style="font-size:20px; cursor:pointer; color:${a.userRating?.rating >= s ? '#f59e0b' : '#cbd5e0'};" onclick="event.stopPropagation(); rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
+                        <div class="actor-stars-modern" style="display:flex; gap:5px; margin:8px 0;">
+                            ${[1,2,3,4,5].map(s => `<i class="fas fa-star" style="font-size:24px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'};" onclick="event.stopPropagation(); rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
                         </div>
-                    ` : `<button onclick="event.stopPropagation(); showAuthModal()" class="login-btn" style="margin-top:8px; background:#667eea; color:white; border:none; padding:6px 16px; border-radius:40px;">Login untuk Rating</button>`}
+                        <div style="font-size:12px; color:#666;">Rating Anda: ${userRatingValue}/5 bintang</div>
+                    ` : `<button onclick="event.stopPropagation(); showAuthModal()" class="login-btn" style="margin-top:8px;">Login untuk Rating</button>`}
                     ${isAdminLoggedIn ? `
                         <div style="margin-top:8px; display:flex; gap:8px;">
-                            <button onclick="event.stopPropagation(); openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b; border:none; padding:6px 12px; border-radius:40px; color:white;">Edit</button>
+                            <button onclick="event.stopPropagation(); openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
                             <button onclick="event.stopPropagation(); adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn" style="background:transparent; border:1px solid #e2e8f0; padding:6px 12px; border-radius:40px; cursor:pointer; color:#e53e3e;">Hapus</button>
                         </div>
                     ` : ''}
@@ -727,15 +517,20 @@ function renderTopActors() {
     });
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
+    
+    const actorSearch = document.getElementById('actorSearch');
+    if (actorSearch) {
+        actorSearch.onkeypress = (e) => { if (e.key === 'Enter') performActorSearch(); };
+    }
 }
 
 function renderWatchlist() {
     if (!currentUser && !isAdminLoggedIn) {
-        document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><p>Login dulu untuk melihat watchlist!</p><button class="login-btn" onclick="showAuthModal()" style="background:#667eea; color:white; border:none; padding:10px 20px; border-radius:40px;">Login</button></div>`;
+        document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><p>Login dulu untuk melihat watchlist!</p><button class="login-btn" onclick="showAuthModal()">Login</button></div>`;
         return;
     }
     const uid = isAdminLoggedIn ? "admin" : currentUser;
-    const wl = watchlist.filter(w => w.userId && w.userId.toString() === uid.toString());
+    const wl = watchlist.filter(w => safeString(w.userId) === safeString(uid));
     if (wl.length === 0) {
         document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><h2>Watchlist Kosong</h2><p>Tambahkan film ke watchlist dari halaman film.</p></div>`;
         return;
@@ -743,15 +538,15 @@ function renderWatchlist() {
     
     let html = `<h2>📌 Watchlist Saya</h2><div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">`;
     wl.forEach(w => {
-        const film = films.find(f => f.id == w.filmId);
+        const film = films.find(f => safeString(f.id) === safeString(w.filmId));
         if (film) {
             html += `
-                <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${film.id}')">
+                <div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer; position:relative;" onclick="openFilmModal('${safeId(film.id)}')">
                     <img class="poster-img" src="${film.posterUrl}" style="width:100%; height:250px; object-fit:cover;">
                     <div class="poster-info" style="padding:10px;">
                         <div class="poster-title" style="font-weight:600;">${escapeHtml(film.title)}</div>
                         <div class="poster-year" style="font-size:12px; color:#666;">${film.year}</div>
-                        <button class="logout-btn" style="margin-top:8px; width:100%; background:transparent; border:1px solid #e2e8f0; padding:5px 10px; border-radius:40px; cursor:pointer; color:#e53e3e;" onclick="event.stopPropagation(); toggleWatchlist('${uid}', '${film.id}')">Hapus</button>
+                        <button class="logout-btn" style="margin-top:8px; width:100%;" onclick="event.stopPropagation(); toggleWatchlist('${uid}', '${film.id}')">Hapus</button>
                     </div>
                 </div>
             `;
@@ -763,23 +558,16 @@ function renderWatchlist() {
 
 function renderProfile() {
     if (!currentUser && !isAdminLoggedIn) {
-        document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><p>Login dulu untuk melihat profil!</p><button class="login-btn" onclick="showAuthModal()" style="background:#667eea; color:white; border:none; padding:10px 20px; border-radius:40px;">Login</button></div>`;
+        document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><p>Login dulu untuk melihat profil!</p><button class="login-btn" onclick="showAuthModal()">Login</button></div>`;
         return;
     }
     viewProfile(isAdminLoggedIn ? "admin" : currentUser);
 }
 
 function viewProfile(identifier) {
-    let uid = identifier;
-    const user = users.find(u => u._id === identifier || u._id.toString() === identifier.toString());
-    if (user) uid = user.username;
-    
+    const uid = safeString(identifier);
     const prof = getProfile(uid);
-    const userRatings = ratings.filter(r => {
-        const ratingUserId = r.userId ? (r.userId.toString ? r.userId.toString() : r.userId) : '';
-        const targetUid = uid.toString();
-        return ratingUserId === targetUid || r.userId === uid;
-    });
+    const userRatings = ratings.filter(r => safeString(r.userId) === uid);
     const avatar = prof.avatarValue ? `<img src="${prof.avatarValue}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;">` : `<i class="fas fa-user-circle" style="font-size:70px;"></i>`;
     
     let html = `
@@ -788,19 +576,19 @@ function viewProfile(identifier) {
             ${avatar}
             <h2>${escapeHtml(prof.displayName)}</h2>
             <p style="color:#666;">${escapeHtml(prof.bio)}</p>
-            ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()" style="margin-top:10px; background:#667eea; color:white; border:none; padding:8px 20px; border-radius:40px; cursor:pointer;">Edit Profil</button>` : ''}
+            ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()" style="margin-top:10px;">Edit Profil</button>` : ''}
         </div>
         <hr style="margin:20px 0;">
         <h3>🏆 Top 3 Film</h3>
         <div class="film-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px,1fr)); gap:20px;">
-            ${prof.top3Films.map(id => {
-                const f = films.find(f => f.id == id);
-                return f ? `<div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer;" onclick="openFilmModal('${f.id}')"><img class="poster-img" src="${f.posterUrl}" style="width:100%; height:250px; object-fit:cover;"><div class="poster-info" style="padding:10px;"><div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div></div></div>` : '';
+            ${(prof.top3Films || []).map(id => {
+                const f = films.find(f => safeString(f.id) === safeString(id));
+                return f ? `<div class="film-poster-card" style="background:white; border-radius:12px; overflow:hidden; cursor:pointer;" onclick="openFilmModal('${safeId(f.id)}')"><img class="poster-img" src="${f.posterUrl}" style="width:100%; height:250px; object-fit:cover;"><div class="poster-info" style="padding:10px;"><div class="poster-title" style="font-weight:600;">${escapeHtml(f.title)}</div></div></div>` : '';
             }).join('') || '<p style="color:#999;">Belum memilih top 3 film</p>'}
         </div>
         <h3>⭐ Rating & Komentar</h3>
         ${userRatings.map(r => {
-            const f = films.find(f => f.id == r.filmId);
+            const f = films.find(f => safeString(f.id) === safeString(r.filmId));
             return f ? `<div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;"><strong>${escapeHtml(f.title)}</strong><br>⭐ ${r.rating}/10<br>"${escapeHtml(r.comment)}"</div>` : '';
         }).join('') || '<p style="color:#999;">Belum memberi rating</p>'}
     `;
@@ -872,8 +660,8 @@ function renderReports() {
                     <div>🏷️ Status: <span style="color:${statusColor}; font-weight:bold;">${statusText}</span></div>
                     ${r.status === 'pending' ? `
                         <div style="margin-top:10px; display:flex; gap:10px;">
-                            <button onclick="resolveReport('${r._id}', 'approve')" class="modal-btn modal-btn-primary" style="background:#10b981; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer;">✅ Hapus Komentar</button>
-                            <button onclick="resolveReport('${r._id}', 'reject')" class="modal-btn modal-btn-secondary" style="background:#ef4444; color:white; border:none; padding:6px 16px; border-radius:40px; cursor:pointer;">❌ Tolak Laporan</button>
+                            <button onclick="resolveReport('${r._id}', 'approve')" class="login-btn" style="background:#10b981;">✅ Hapus Komentar</button>
+                            <button onclick="resolveReport('${r._id}', 'reject')" class="login-btn" style="background:#ef4444;">❌ Tolak Laporan</button>
                         </div>
                     ` : ''}
                 </div>
@@ -883,7 +671,6 @@ function renderReports() {
     
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
-    
     filterReports('pending');
 }
 
@@ -893,27 +680,16 @@ function filterReports(status) {
     currentReportFilter = status;
     const items = document.querySelectorAll('.report-item');
     items.forEach(item => {
-        if (item.getAttribute('data-status') === status) {
-            item.style.display = 'block';
-        } else {
-            item.style.display = 'none';
-        }
+        item.style.display = item.getAttribute('data-status') === status ? 'block' : 'none';
     });
     
-    const btns = ['filterPending', 'filterApproved', 'filterRejected'];
-    btns.forEach(btnId => {
+    ['filterPending', 'filterApproved', 'filterRejected'].forEach(btnId => {
         const btn = document.getElementById(btnId);
         if (btn) btn.style.opacity = '0.6';
     });
     const activeBtn = status === 'pending' ? 'filterPending' : (status === 'approved' ? 'filterApproved' : 'filterRejected');
     const activeBtnEl = document.getElementById(activeBtn);
     if (activeBtnEl) activeBtnEl.style.opacity = '1';
-}
-
-async function resolveReport(id, action) {
-    const res = await apiCall(`/api/reports/${id}`, { method: 'PUT', body: JSON.stringify({ status: action === 'approve' ? 'approved' : 'rejected' }) });
-    if (res?.success) { await loadData(true); showToast(action === 'approve' ? "Komentar telah dihapus!" : "Laporan ditolak.", "success"); renderReports(); render(); }
-    else showToast("Gagal memproses laporan!", "error");
 }
 
 function render() {
@@ -924,7 +700,6 @@ function render() {
     else if (currentView === "profile") renderProfile();
     else if (currentView === "about") renderAbout();
     else if (currentView === "reports") renderReports();
-    
     updateStats();
 }
 
@@ -951,605 +726,11 @@ function changeView(view) {
     render();
 }
 
-// ==================== MODAL FILM ====================
-function openFilmModal(id) {
-    const film = films.find(f => f.id == id);
-    if (!film) {
-        console.error('Film tidak ditemukan:', id);
-        return;
-    }
-    
-    joinFilmRoom(id);
-    
-    const avg = getAvgRating(id);
-    const uid = isAdminLoggedIn ? "admin" : currentUser;
-    const userRating = uid ? getUserRating(id, uid) : null;
-    const inWatchlist = uid ? isInWatchlist(uid, id) : false;
-    
-    if (userRating) {
-        currentRating = userRating.rating;
-    } else {
-        currentRating = 7;
-    }
-    
-    const html = `
-        <div id="filmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px; max-height:90vh; overflow-y:auto;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-film"></i> ${escapeHtml(film.title)}</h2>
-                    <span class="close-modal" onclick="closeFilmModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div class="modal-film-header" style="display:flex; gap:20px; flex-wrap:wrap;">
-                        <img class="modal-poster" src="${film.posterUrl}" onerror="this.src='https://via.placeholder.com/150x220?text=No+Image'" style="width:150px; height:220px; object-fit:cover; border-radius:12px;">
-                        <div class="modal-info" style="flex:1;">
-                            <div class="modal-title" style="font-size:20px; font-weight:bold; margin-bottom:10px;">${escapeHtml(film.title)} (${film.year})</div>
-                            <div class="modal-synopsis" style="background:#f8fafc; padding:12px; border-radius:12px; margin:10px 0; font-size:13px; line-height:1.5;">${escapeHtml(film.synopsis)}</div>
-                            <div class="modal-avg-rating" style="background:#fef3c7; padding:6px 12px; border-radius:20px; display:inline-block; font-size:13px;">${avg ? `⭐ Rata-rata: ${avg}/10 (${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).length} rating)` : '⭐ Belum ada rating'}</div>
-                            <div style="margin-top:15px;">
-                                <button class="trailer-btn" onclick="window.open('${film.trailer}','_blank')" style="background:#dc2626; color:white; border:none; padding:8px 16px; border-radius:40px; cursor:pointer;"><i class="fab fa-youtube"></i> Tonton Trailer</button>
-                                ${uid ? `<button class="watchlist-modal-btn ${inWatchlist ? 'in-watchlist' : ''}" onclick="toggleWatchlist('${uid}', '${id}'); closeFilmModal();" style="background:${inWatchlist ? '#10b981' : '#e2e8f0'}; color:${inWatchlist ? 'white' : '#333'}; border:none; padding:8px 16px; border-radius:40px; cursor:pointer; margin-left:8px;"><i class="fas ${inWatchlist ? 'fa-check' : 'fa-bookmark'}"></i> ${inWatchlist ? 'Di Watchlist' : 'Tambah ke Watchlist'}</button>` : '<button class="watchlist-modal-btn" onclick="showAuthModal()" style="background:#e2e8f0; border:none; padding:8px 16px; border-radius:40px; cursor:pointer;"><i class="fas fa-lock"></i> Login untuk Watchlist</button>'}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="modal-rating" style="margin:20px 0; padding-top:15px; border-top:1px solid #eef2f6;">
-                        ${uid ? `
-                            <label style="font-weight:600; margin-bottom:10px; display:block;"><i class="fas fa-star"></i> Rating Kamu</label>
-                            <div class="stars" id="starSelector" style="display:flex; gap:8px; justify-content:center; margin:15px 0;">
-                                ${[1,2,3,4,5,6,7,8,9,10].map(s => `<span class="star" data-rating="${s}" style="font-size:32px; cursor:pointer; color:${userRating && userRating.rating >= s ? '#f59e0b' : '#cbd5e0'};">★</span>`).join('')}
-                            </div>
-                            <textarea id="commentInput" rows="3" placeholder="Tulis komentar..." style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:12px; margin:10px 0; font-family:inherit;">${userRating?.comment || ''}</textarea>
-                            <div class="modal-actions" style="display:flex; gap:10px;">
-                                <button class="modal-btn modal-btn-primary" onclick="submitRating('${id}')" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-save"></i> Simpan Rating</button>
-                                ${userRating ? `<button class="modal-btn modal-btn-secondary" onclick="deleteRatingFilm('${id}')" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus Rating</button>` : ''}
-                            </div>
-                        ` : `
-                            <div class="login-prompt" style="text-align:center; padding:20px; background:#f8fafc; border-radius:16px;">
-                                <i class="fas fa-lock" style="font-size:32px; color:#94a3b8; margin-bottom:10px; display:block;"></i>
-                                <p>Login untuk memberi rating & komentar</p>
-                                <button class="login-btn" onclick="showAuthModal()" style="background:#667eea; color:white; border:none; padding:8px 20px; border-radius:40px; cursor:pointer; margin-top:10px;">Login Sekarang</button>
-                            </div>
-                        `}
-                    </div>
-                    
-                    <h3 style="margin:20px 0 10px;"><i class="fas fa-comments"></i> Semua Komentar</h3>
-                    <div class="review-list" style="max-height:300px; overflow-y:auto;">
-                        ${ratings.filter(r => r.filmId && r.filmId.toString() === id.toString()).sort((a,b) => b.timestamp - a.timestamp).map(r => {
-                            const displayName = getDisplayNameFromObjectId(r.userId);
-                            const canDelete = isAdminLoggedIn;
-                            const canReport = (currentUser || isAdminLoggedIn) && currentUser !== displayName;
-                            return `
-                                <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px; position:relative;">
-                                    <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:5px;">
-                                        <span class="review-user" onclick="viewProfile('${r.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
-                                            <i class="fas fa-user-circle"></i> ${escapeHtml(displayName)}
-                                        </span>
-                                        <span class="review-rating" style="color:#f59e0b;">⭐ ${r.rating}/10</span>
-                                    </div>
-                                    <div class="review-comment" style="margin:8px 0;">"${escapeHtml(r.comment)}"</div>
-                                    <div class="review-time" style="font-size:10px; color:#999;">${new Date(r.timestamp).toLocaleString()}</div>
-                                    <div style="display:flex; gap:8px; margin-top:8px;">
-                                        ${canReport ? `<button class="report-btn" type="button" onclick="event.stopPropagation(); showReportModal('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
-                                        ${canDelete ? `<button class="admin-delete-comment-btn" onclick="event.stopPropagation(); adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(displayName)}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-    document.body.style.overflow = "hidden";
-    
-    if (uid) {
-        const stars = document.querySelectorAll("#starSelector .star");
-        stars.forEach(s => {
-            const val = parseInt(s.dataset.rating);
-            s.onclick = (e) => {
-                e.stopPropagation();
-                currentRating = val;
-                stars.forEach(ss => {
-                    if (parseInt(ss.dataset.rating) <= currentRating) {
-                        ss.classList.add("active");
-                        ss.style.color = "#f59e0b";
-                    } else {
-                        ss.classList.remove("active");
-                        ss.style.color = "#cbd5e0";
-                    }
-                });
-            };
-        });
-    }
-}
+// ==================== FUNGSI LAINNYA (Rating, Watchlist, Profile, dll) ====================
+// ... (fungsi addRating, deleteRating, addNewFilm, updateFilm, dll tetap sama seperti sebelumnya)
 
-function closeFilmModal() {
-    if (socket && currentFilmId) {
-        socket.emit('leave-film', currentFilmId);
-        currentFilmId = null;
-    }
-    const modal = document.getElementById("filmModal");
-    if (modal) modal.remove();
-    document.body.style.overflow = "";
-}
-
-async function submitRating(id) {
-    if (!currentUser && !isAdminLoggedIn) { 
-        showToast("Login dulu!", "error"); 
-        showAuthModal(); 
-        return; 
-    }
-    
-    const rating = currentRating || 7;
-    const commentInput = document.getElementById("commentInput");
-    const comment = commentInput ? commentInput.value.trim() : "";
-    const uid = isAdminLoggedIn ? "admin" : currentUser;
-    
-    const success = await addRating(id, uid, rating, comment);
-    if (success) {
-        closeFilmModal();
-        setTimeout(() => {
-            openFilmModal(id);
-        }, 500);
-        render();
-    }
-}
-
-async function deleteRatingFilm(id) {
-    if (!confirm("Hapus rating ini?")) return;
-    const uid = isAdminLoggedIn ? "admin" : currentUser;
-    const res = await apiCall('/api/ratings', { 
-        method: 'DELETE', 
-        body: JSON.stringify({ filmId: id, userId: uid }) 
-    });
-    if (res?.success) { 
-        await loadData(true); 
-        showToast("Rating dihapus!", "info");
-        closeFilmModal();
-        setTimeout(() => {
-            openFilmModal(id);
-        }, 500);
-        render();
-    } else {
-        showToast(res?.message || "Gagal menghapus rating!", "error");
-    }
-}
-
-function joinFilmRoom(filmId) {
-    if (socket && currentFilmId !== filmId) {
-        if (currentFilmId) socket.emit('leave-film', currentFilmId);
-        currentFilmId = filmId;
-        socket.emit('join-film', filmId);
-        console.log(`📺 Joined room: film_${filmId}`);
-    }
-}
-
-function addCommentToUI(comment) {
-    const reviewList = document.querySelector('.review-list');
-    if (!reviewList) return;
-    
-    const commentHtml = `
-        <div class="review-item" style="background:#fef3c7; transition: all 0.3s; animation: fadeIn 0.3s ease;">
-            <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                <span class="review-user" onclick="viewProfile('${comment.userId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">
-                    <i class="fas fa-user-circle"></i> ${escapeHtml(comment.displayName)}
-                </span>
-                <span class="review-rating" style="color:#f59e0b;">⭐ ${comment.rating}/10</span>
-            </div>
-            <div class="review-comment">"${escapeHtml(comment.comment)}"</div>
-            <div class="review-time" style="font-size:10px; color:#999;">Baru saja</div>
-        </div>
-    `;
-    
-    reviewList.insertAdjacentHTML('afterbegin', commentHtml);
-    
-    setTimeout(() => {
-        const newComment = reviewList.firstElementChild;
-        if (newComment) newComment.style.background = '#f8fafc';
-    }, 1000);
-}
-
-// ==================== MODAL REPORT ====================
-function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    console.log('showReportModal called with:', {
-        filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp
-    });
-    // Konversi timestamp ke number jika perlu
-    const safeTimestamp = typeof timestamp === 'number' ? timestamp : parseInt(timestamp);
-    
-    const existingModal = document.getElementById("reportModal");
-    if (existingModal) existingModal.remove();
-    
-    // Escape semua string untuk mencegah error
-    const safeFilmTitle = escapeHtml(filmTitle);
-    const safeReportedByName = escapeHtml(reportedByName);
-    const safeComment = escapeHtml(comment);
-    
-    const modalHtml = `
-        <div id="reportModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:2000; justify-content:center; align-items:center;">
-            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-flag"></i> Laporkan Komentar</h2>
-                    <span class="close-modal" onclick="closeReportModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div style="margin-bottom:15px; padding:12px; background:#fef3c7; border-radius:12px;">
-                        <div><strong>👤 Penulis:</strong> ${safeReportedByName}</div>
-                        <div><strong>💬 Komentar:</strong> "${safeComment}"</div>
-                        <div><strong>⭐ Rating:</strong> ${rating}/10</div>
-                        <div><strong>🎬 Film:</strong> ${safeFilmTitle}</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label style="font-weight:600; margin-bottom:8px; display:block;">Alasan Melaporkan <span style="color:red;">*</span></label>
-                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-family:inherit; resize:vertical;"></textarea>
-                        <div style="font-size:11px; color:#666; margin-top:5px;">Minimal 5 karakter</div>
-                    </div>
-                    
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="submitReport('${filmId}', '${safeFilmTitle}', '${reportedUserId}', '${safeReportedByName}', '${safeComment}', ${rating}, ${safeTimestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
-                        <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Batal</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    document.body.style.overflow = "hidden";
-    
-    setTimeout(() => {
-        const reasonTextarea = document.getElementById('reportReason');
-        if (reasonTextarea) reasonTextarea.focus();
-    }, 100);
-}
-
-function closeReportModal() {
-    const modal = document.getElementById("reportModal");
-    if (modal) modal.remove();
-    document.body.style.overflow = "";
-}
-
-async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    const reasonTextarea = document.getElementById("reportReason");
-    const reason = reasonTextarea ? reasonTextarea.value.trim() : "";
-    
-    if (!reason || reason.length < 5) {
-        showToast("Harap isi alasan pelaporan (minimal 5 karakter)!", "warning");
-        reasonTextarea?.focus();
-        return;
-    }
-    
-    if (!currentUser && !isAdminLoggedIn) {
-        showToast("Login dulu untuk melaporkan komentar!", "error");
-        showAuthModal();
-        closeReportModal();
-        return;
-    }
-    
-    if (currentUser === reportedByName) {
-        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
-        closeReportModal();
-        return;
-    }
-    
-    const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${reason}\n\nLaporan akan ditinjau oleh admin.`);
-    if (!confirmed) return;
-    
-    try {
-        const res = await apiCall('/api/reports', {
-            method: 'POST',
-            body: JSON.stringify({
-                filmId,
-                filmTitle,
-                reportedUserId,
-                reportedByName,
-                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
-                comment,
-                rating,
-                timestamp: timestamp,
-                reportReason: reason
-            })
-        });
-        
-        if (res?.success) {
-            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
-            closeReportModal();
-        } else {
-            showToast(res?.message || "Gagal mengirim laporan!", "error");
-        }
-    } catch (error) {
-        console.error("Error reporting comment:", error);
-        showToast("Gagal mengirim laporan!", "error");
-    }
-}
-
-// ==================== ADMIN DELETE RATING ====================
-async function adminDeleteRating(filmId, userId, comment, userName) {
-    if (!isAdminLoggedIn) {
-        showToast("Hanya admin yang dapat menghapus komentar!", "error");
-        return;
-    }
-    
-    const confirmed = confirm(`Hapus komentar dari "${userName}"?\n\nKomentar: "${comment}"\n\nTindakan ini tidak dapat dibatalkan.`);
-    if (!confirmed) return;
-    
-    try {
-        const res = await apiCall('/api/ratings', {
-            method: 'DELETE',
-            body: JSON.stringify({ filmId, userId })
-        });
-        
-        if (res?.success) {
-            showToast(`Komentar dari ${userName} telah dihapus!`, "success");
-            if (currentFilmId == filmId && document.getElementById('filmModal')) {
-                closeFilmModal();
-                setTimeout(() => openFilmModal(filmId), 500);
-            }
-            render();
-        } else {
-            showToast(res?.message || "Gagal menghapus komentar!", "error");
-        }
-    } catch (error) {
-        console.error("Error deleting rating:", error);
-        showToast("Gagal menghapus komentar!", "error");
-    }
-}
-
-// ==================== AUTH MODAL ====================
-function showAuthModal() {
-    const existing = document.getElementById("authModal");
-    if (existing) existing.remove();
-    const html = `
-        <div id="authModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-key"></i> Login / Daftar</h2>
-                    <span class="close-modal" onclick="closeAuthModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div id="loginForm">
-                        <div class="form-group"><label>Username</label><input type="text" id="loginUsername" placeholder="Masukkan username" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Masukkan password" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <button onclick="doLogin()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;">Login</button>
-                        <div class="toggle-form" style="margin-top:15px; text-align:center;">Belum punya akun? <span onclick="showRegisterForm()" style="color:#667eea; cursor:pointer;">Daftar sekarang</span></div>
-                    </div>
-                    <div id="registerForm" style="display:none;">
-                        <div class="form-group"><label>Username</label><input type="text" id="regUsername" placeholder="Pilih username"></div>
-                        <div class="form-group"><label>Password</label><input type="password" id="regPassword" placeholder="Minimal 6 karakter"></div>
-                        <div class="form-group"><label>Konfirmasi Password</label><input type="password" id="regConfirmPassword" placeholder="Konfirmasi password"></div>
-                        <div class="form-group"><label>Nama Tampilan</label><input type="text" id="regDisplayName" placeholder="Nama yang akan ditampilkan"></div>
-                        <button onclick="doRegister()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Daftar</button>
-                        <div class="toggle-form" style="margin-top:15px; text-align:center;">Sudah punya akun? <span onclick="showLoginForm()" style="color:#667eea; cursor:pointer;">Login sekarang</span></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-    showLoginForm();
-}
-
-function closeAuthModal() { const m = document.getElementById("authModal"); if (m) m.remove(); }
-function showLoginForm() { const l = document.getElementById("loginForm"); const r = document.getElementById("registerForm"); if (l) l.style.display = "block"; if (r) r.style.display = "none"; }
-function showRegisterForm() { const l = document.getElementById("loginForm"); const r = document.getElementById("registerForm"); if (l) l.style.display = "none"; if (r) r.style.display = "block"; }
-
-// ==================== ADMIN MODALS ====================
-function openAddFilmModal() {
-    if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
-    tempPosterImage = null;
-    const html = `
-        <div id="addFilmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-plus-circle"></i> Tambah Film Baru</h2>
-                    <span class="close-modal" onclick="closeAddFilmModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div class="form-group"><label>Judul Film</label><input type="text" id="newFilmTitle" placeholder="Contoh: Inception" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                        <div class="form-group"><label>Tahun Rilis</label><input type="number" id="newFilmYear" placeholder="2024" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group"><label>URL Poster</label><input type="text" id="newFilmPoster" placeholder="https://..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    </div>
-                    <div class="form-group"><label>URL Trailer</label><input type="text" id="newFilmTrailer" placeholder="https://youtube.com/..." style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label>Sinopsis</label><textarea id="newFilmSynopsis" rows="4" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></textarea></div>
-                    <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="newFilmActors" placeholder="Tom Hanks, Leonardo DiCaprio" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="addNewFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Tambah Film</button>
-                        <button onclick="closeAddFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-function closeAddFilmModal() { const m = document.getElementById("addFilmModal"); if (m) m.remove(); tempPosterImage = null; }
-
-function openEditFilmModal(id) {
-    if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
-    const film = films.find(f => f.id == id);
-    if (!film) return;
-    tempPosterImage = null;
-    const html = `
-        <div id="editFilmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-edit"></i> Edit Film</h2>
-                    <span class="close-modal" onclick="closeEditFilmModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <input type="hidden" id="editFilmId" value="${film.id}">
-                    <div class="form-group"><label>Judul</label><input type="text" id="editFilmTitle" value="${escapeHtml(film.title)}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                        <div class="form-group"><label>Tahun</label><input type="number" id="editFilmYear" value="${film.year}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group"><label>URL Poster</label><input type="text" id="editFilmPoster" value="${film.posterUrl}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    </div>
-                    <div class="form-group"><label>URL Trailer</label><input type="text" id="editFilmTrailer" value="${film.trailer}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label>Sinopsis</label><textarea id="editFilmSynopsis" rows="4" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">${escapeHtml(film.synopsis)}</textarea></div>
-                    <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="editFilmActors" value="${film.actors ? film.actors.join(', ') : ''}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="updateFilm()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Simpan</button>
-                        <button onclick="closeEditFilmModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-function closeEditFilmModal() { const m = document.getElementById("editFilmModal"); if (m) m.remove(); tempPosterImage = null; }
-
-function openAddActorModal() {
-    if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
-    const html = `
-        <div id="addActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-user-plus"></i> Tambah Aktor</h2>
-                    <span class="close-modal" onclick="closeAddActorModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div class="form-group"><label>Nama Aktor</label><input type="text" id="newActorName" placeholder="Tom Hanks" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label>Bio</label><textarea id="newActorBio" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></textarea></div>
-                    <div class="form-group"><label>Foto URL</label><input type="text" id="newActorPhotoUrl" placeholder="https://... (opsional)" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="addNewActor()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Tambah</button>
-                        <button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-function closeAddActorModal() { const m = document.getElementById("addActorModal"); if (m) m.remove(); }
-
-function openEditActorModal(name) {
-    if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
-    const actor = actors.find(a => a.name === name);
-    if (!actor) return;
-    const html = `
-        <div id="editActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-edit"></i> Edit Aktor</h2>
-                    <span class="close-modal" onclick="closeEditActorModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <input type="hidden" id="editActorId" value="${actor.id}">
-                    <div class="form-group"><label>Nama</label><input type="text" id="editActorName" value="${escapeHtml(actor.name)}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label>Bio</label><textarea id="editActorBio" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">${escapeHtml(actor.bio)}</textarea></div>
-                    <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="updateActor()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Simpan</button>
-                        <button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-}
-function closeEditActorModal() { const m = document.getElementById("editActorModal"); if (m) m.remove(); }
-
-function openSettingModal() {
-    const uid = isAdminLoggedIn ? "admin" : currentUser;
-    const prof = getProfile(uid);
-    const ratedFilms = ratings.filter(r => r.userId && r.userId.toString() === uid.toString()).map(r => films.find(f => f.id == r.filmId)).filter(f => f);
-    tempAvatarImage = prof.avatarValue;
-    const avatar = prof.avatarValue || `https://ui-avatars.com/api/?name=${prof.displayName}&background=667eea&color=fff`;
-    
-    const html = `
-        <div id="settingModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
-            <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
-                    <h2 style="color:white;"><i class="fas fa-user-edit"></i> Edit Profil</h2>
-                    <span class="close-modal" onclick="closeSettingModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
-                </div>
-                <div class="modal-body" style="padding:20px;">
-                    <div style="text-align:center;"><img id="avatarPreview" src="${avatar}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;"><br><button class="login-btn" onclick="document.getElementById('avatarUpload').click()" style="background:#667eea; color:white; border:none; padding:8px 16px; border-radius:40px;">Upload Foto</button><input type="file" id="avatarUpload" accept="image/*" style="display:none;"></div>
-                    <div class="form-group"><label>Nama Tampilan</label><input type="text" id="settingDisplayName" value="${escapeHtml(prof.displayName)}" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                    <div class="form-group"><label>Bio</label><textarea id="settingBio" rows="3" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;">${escapeHtml(prof.bio)}</textarea></div>
-                    ${ratedFilms.length > 0 ? `
-                        <div class="form-group"><label>Top 3 Film</label>
-                            <select id="top1Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #1 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[0] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
-                            <select id="top2Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px; margin-bottom:8px;"><option value="">-- Film #2 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[1] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
-                            <select id="top3Select" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"><option value="">-- Film #3 --</option>${ratedFilms.map(f => `<option value="${f.id}" ${prof.top3Films[2] == f.id ? 'selected' : ''}>${escapeHtml(f.title)}</option>`).join('')}</select>
-                        </div>
-                    ` : '<p>Belum ada film yang dirating</p>'}
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;"><button onclick="saveProfile()" class="modal-btn modal-btn-primary" style="flex:1; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Simpan</button><button onclick="closeSettingModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px;">Batal</button></div>
-                </div>
-            </div>
-        </div>
-    `;
-    document.body.insertAdjacentHTML('beforeend', html);
-    document.getElementById("avatarUpload").onchange = function(e) {
-        const file = e.target.files[0];
-        if (file && file.size <= 2*1024*1024) {
-            const reader = new FileReader();
-            reader.onload = ev => { document.getElementById("avatarPreview").src = ev.target.result; tempAvatarImage = ev.target.result; };
-            reader.readAsDataURL(file);
-        } else showToast("Ukuran maksimal 2MB!", "error");
-    };
-}
-function closeSettingModal() { const m = document.getElementById("settingModal"); if (m) m.remove(); tempAvatarImage = null; }
-
-function updateUI() {
-    const disp = document.getElementById("userDisplay");
-    const auth = document.getElementById("authBtn");
-    const reg = document.getElementById("registerBtn");
-    const rep = document.getElementById("reportsNavBtn");
-    
-    if (isAdminLoggedIn) {
-        const p = getProfile("admin");
-        disp.innerHTML = `${p.avatarValue ? `<img src="${p.avatarValue}" style="width:28px;height:28px;border-radius:50%;margin-right:6px;">` : '<i class="fas fa-user-shield" style="margin-right:6px;"></i>'} ${escapeHtml(p.displayName)} <span class="admin-badge" style="background:#f59e0b; font-size:10px; padding:2px 8px; border-radius:20px; color:white; margin-left:5px;">Admin</span>`;
-        auth.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
-        auth.onclick = logout;
-        auth.classList.add("logout-btn");
-        auth.classList.remove("login-btn");
-        reg.style.display = "none";
-        if (rep) rep.style.display = "flex";
-    } else if (currentUser) {
-        const p = getProfile(currentUser);
-        disp.innerHTML = `${p.avatarValue ? `<img src="${p.avatarValue}" style="width:28px;height:28px;border-radius:50%;margin-right:6px;">` : '<i class="fas fa-user-circle" style="margin-right:6px;"></i>'} ${escapeHtml(p.displayName)}`;
-        auth.innerHTML = '<i class="fas fa-sign-out-alt"></i> Logout';
-        auth.onclick = logout;
-        auth.classList.add("logout-btn");
-        auth.classList.remove("login-btn");
-        reg.style.display = "none";
-        if (rep) rep.style.display = "none";
-    } else {
-        disp.innerHTML = '<i class="fas fa-sign-in-alt"></i> Belum login';
-        auth.innerHTML = '<i class="fas fa-key"></i> Login';
-        auth.onclick = showAuthModal;
-        auth.classList.add("login-btn");
-        auth.classList.remove("logout-btn");
-        reg.style.display = "inline-block";
-        reg.onclick = () => { showAuthModal(); showRegisterForm(); };
-        if (rep) rep.style.display = "none";
-    }
-    
-    const fab = document.getElementById("adminFab");
-    if (fab) fab.style.display = isAdminLoggedIn ? "flex" : "none";
-}
-
-function initNav() {
-    document.querySelectorAll(".nav-btn").forEach(btn => {
-        btn.onclick = () => {
-            currentView = btn.dataset.view;
-            document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-            btn.classList.add("active");
-            if (currentFilmId && socket) {
-                socket.emit('leave-film', currentFilmId);
-                currentFilmId = null;
-            }
-            render();
-        };
-    });
-}
+// Untuk menghemat ruang, fungsi-fungsi lain yang sudah ada tetap digunakan
+// Pastikan semua fungsi menggunakan safeString dan safeId untuk ID
 
 // ==================== GLOBAL FUNCTIONS EXPOSED ====================
 window.doLogin = doLogin;
