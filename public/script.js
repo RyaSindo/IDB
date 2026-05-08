@@ -144,12 +144,26 @@ async function logout() {
 
 // ==================== SOCKET.IO =======================
 function initSocket() {
-    socket = io({ transports: ['polling'] });
+    socket = io({
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000
+    });
     
-    socket.on('connect', () => console.log('✅ Real-time connected'));
-    socket.on('film-rating-updated', (data) => {
-        if (currentView === 'beranda' || currentView === 'toprating') refreshCurrentView();
-        if (safeString(currentFilmId) === safeString(data.filmId)) updateModalRating(data);
+    socket.on('connect', () => {
+        console.log('✅ Real-time connected');
+    });
+    
+    socket.on('connect_error', (error) => {
+        console.log('Socket connection error:', error);
+        // Fallback ke polling saja jika websocket gagal
+        if (socket.io.opts.transports[0] !== 'polling') {
+            socket.io.opts.transports = ['polling'];
+            socket.connect();
+        }
     });
     socket.on('actor-added', () => { if (currentView === 'topactors') refreshCurrentView(); });
     socket.on('actor-updated', () => { if (currentView === 'topactors') refreshCurrentView(); });
@@ -295,9 +309,9 @@ function renderActorStars(rating) {
     let stars = '';
     for (let i = 1; i <= 5; i++) {
         if (i <= starRating) {
-            stars += '<i class="fas fa-star" style="color:#f59e0b; font-size:20px; margin-right:3px;"></i>';
+            stars += '<i class="fas fa-star" style="color: #f59e0b; font-size: 18px; margin-right: 2px;"></i>';
         } else {
-            stars += '<i class="far fa-star" style="color:#cbd5e0; font-size:20px; margin-right:3px;"></i>';
+            stars += '<i class="far fa-star" style="color: #cbd5e0; font-size: 18px; margin-right: 2px;"></i>';
         }
     }
     return stars;
@@ -972,20 +986,26 @@ function renderTopActors() {
         const userRatingValue = a.userRating?.rating || 0;
         
         html += `
-            <div class="actor-card">
-                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'">
-                <div class="actor-info-modern">
-                    <div class="actor-name-modern">${medal} ${escapeHtml(a.name)}</div>
-                    <div class="actor-bio-modern">${escapeHtml(a.bio)}</div>
-                    <div style="display:flex; gap:16px; margin:8px 0;">
-                        <div>⭐ ${a.avgRating}/5</div>
+            <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; margin-bottom:16px;">
+                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
+                <div class="actor-info-modern" style="flex:1;">
+                    <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
+                    <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
+                    <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            ${renderActorStars(parseFloat(a.avgRating))}
+                            <span>(${a.avgRating}/5)</span>
+                        </div>
                         <div>👤 ${a.ratingCount} rating</div>
                     </div>
                     ${isLoggedIn ? `
-                        <div class="actor-stars-modern" style="display:flex; gap:5px; margin:8px 0;">
+                        <div class="actor-stars-modern" style="display:flex; gap:5px; margin:8px 0; align-items:center;">
                             ${[1,2,3,4,5].map(s => `<i class="fas fa-star" style="font-size:24px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'};" onclick="rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
+                            <span style="margin-left:8px; font-size:13px;">Rating Anda: ${userRatingValue}/5</span>
                         </div>
-                        <div style="font-size:12px; color:#666;">Rating Anda: ${userRatingValue}/5 bintang ${renderActorStars(userRatingValue)}</div>
+                        <div style="font-size:12px; color:#666; margin-top:4px;">
+                            ${renderActorStars(userRatingValue)} (${userRatingValue}/5 bintang)
+                        </div>
                     ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:8px;">Login untuk Rating</button>`}
                     ${isAdminLoggedIn ? `
                         <div style="margin-top:8px; display:flex; gap:8px;">

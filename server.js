@@ -27,9 +27,42 @@ cloudinary.config({
 // Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { origin: "*", credentials: true },
+    cors: { 
+        origin: "*", 
+        credentials: true,
+        methods: ["GET", "POST"]
+    },
     transports: ['websocket', 'polling'],
-    allowEIO3: true
+    allowEIO3: true,
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    upgradeTimeout: 10000,
+    allowUpgrades: true,
+    cookie: false
+});
+
+// Log connection errors
+io.engine.on("connection_error", (err) => {
+    console.log("Socket.IO connection error:", err);
+    console.log("Error code:", err.code);
+    console.log("Error message:", err.message);
+});
+
+io.on('connection', (socket) => {
+    console.log('🔌 Client connected:', socket.id);
+    console.log('Transport:', socket.conn.transport.name);
+    
+    socket.on('join-film', (filmId) => {
+        console.log(`Client ${socket.id} joined film_${filmId}`);
+        socket.join(`film_${filmId}`);
+    });
+    socket.on('leave-film', (filmId) => {
+        console.log(`Client ${socket.id} left film_${filmId}`);
+        socket.leave(`film_${filmId}`);
+    });
+    socket.on('disconnect', (reason) => {
+        console.log('🔌 Client disconnected:', socket.id, 'Reason:', reason);
+    });
 });
 
 // ==================== SCHEMAS ====================
