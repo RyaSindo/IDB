@@ -62,18 +62,18 @@ function showAuthModal() {
                 </div>
                 <div class="modal-body" style="padding:20px;">
                     <div id="loginForm">
-                        <div class="form-group"><label>Username</label><input type="text" id="loginUsername" placeholder="Masukkan username" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Masukkan password" style="width:100%; padding:10px; border:1px solid #ddd; border-radius:10px;"></div>
-                        <button onclick="doLogin()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;">Login</button>
-                        <div class="toggle-form" style="margin-top:15px; text-align:center;">Belum punya akun? <span onclick="showRegisterForm()" style="color:#667eea; cursor:pointer;">Daftar sekarang</span></div>
+                        <div class="form-group"><label>Username</label><input type="text" id="loginUsername" placeholder="Masukkan username"></div>
+                        <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Masukkan password"></div>
+                        <button onclick="doLogin()" class="modal-btn modal-btn-primary">Login</button>
+                        <div class="toggle-form">Belum punya akun? <span onclick="showRegisterForm()">Daftar sekarang</span></div>
                     </div>
                     <div id="registerForm" style="display:none;">
                         <div class="form-group"><label>Username</label><input type="text" id="regUsername" placeholder="Pilih username"></div>
                         <div class="form-group"><label>Password</label><input type="password" id="regPassword" placeholder="Minimal 6 karakter"></div>
                         <div class="form-group"><label>Konfirmasi Password</label><input type="password" id="regConfirmPassword" placeholder="Konfirmasi password"></div>
                         <div class="form-group"><label>Nama Tampilan</label><input type="text" id="regDisplayName" placeholder="Nama yang akan ditampilkan"></div>
-                        <button onclick="doRegister()" class="modal-btn modal-btn-primary" style="width:100%; background:#667eea; color:white; border:none; padding:10px; border-radius:40px;">Daftar</button>
-                        <div class="toggle-form" style="margin-top:15px; text-align:center;">Sudah punya akun? <span onclick="showLoginForm()" style="color:#667eea; cursor:pointer;">Login sekarang</span></div>
+                        <button onclick="doRegister()" class="modal-btn modal-btn-primary">Daftar</button>
+                        <div class="toggle-form">Sudah punya akun? <span onclick="showLoginForm()">Login sekarang</span></div>
                     </div>
                 </div>
             </div>
@@ -83,24 +83,9 @@ function showAuthModal() {
     showLoginForm();
 }
 
-function closeAuthModal() { 
-    const m = document.getElementById("authModal"); 
-    if (m) m.remove(); 
-}
-
-function showLoginForm() { 
-    const l = document.getElementById("loginForm"); 
-    const r = document.getElementById("registerForm"); 
-    if (l) l.style.display = "block"; 
-    if (r) r.style.display = "none"; 
-}
-
-function showRegisterForm() { 
-    const l = document.getElementById("loginForm"); 
-    const r = document.getElementById("registerForm"); 
-    if (l) l.style.display = "none"; 
-    if (r) r.style.display = "block"; 
-}
+function closeAuthModal() { const m = document.getElementById("authModal"); if (m) m.remove(); }
+function showLoginForm() { const l = document.getElementById("loginForm"); const r = document.getElementById("registerForm"); if (l) l.style.display = "block"; if (r) r.style.display = "none"; }
+function showRegisterForm() { const l = document.getElementById("loginForm"); const r = document.getElementById("registerForm"); if (l) l.style.display = "none"; if (r) r.style.display = "block"; }
 
 async function doLogin() {
     const username = document.getElementById("loginUsername")?.value.trim();
@@ -155,19 +140,15 @@ function initSocket() {
         forceNew: false
     });
     
-    socket.on('connect', () => {
-        console.log('✅ Real-time connected');
-    });
-    
+    socket.on('connect', () => console.log('✅ Real-time connected'));
     socket.on('connect_error', (error) => {
         console.log('Socket connection error:', error);
-        // Coba fallback ke polling
         if (socket.io.opts.transports[0] !== 'polling') {
-            console.log('Falling back to polling transport');
             socket.io.opts.transports = ['polling'];
             socket.connect();
         }
     });
+    socket.on('film-rating-updated', () => refreshCurrentView());
     socket.on('actor-added', () => { if (currentView === 'topactors') refreshCurrentView(); });
     socket.on('actor-updated', () => { if (currentView === 'topactors') refreshCurrentView(); });
     socket.on('actor-deleted', () => { if (currentView === 'topactors') refreshCurrentView(); });
@@ -553,6 +534,41 @@ function openFilmModal(id) {
     if (userRating) currentRating = userRating.rating;
     else currentRating = 7;
     
+    const reviewListHtml = ratings.filter(r => safeString(r.filmId) === safeString(id)).sort((a,b) => b.timestamp - a.timestamp).map(r => {
+        const displayName = getDisplayNameFromObjectId(r.userId);
+        const canReport = (currentUser || isAdminLoggedIn) && currentUser !== displayName;
+        const canDelete = isAdminLoggedIn;
+        const safeUserId = safeString(r.userId);
+        const safeComment = escapeHtml(r.comment);
+        const safeDisplayName = escapeHtml(displayName);
+        const safeFilmTitle = escapeHtml(film.title);
+        const ratingValue = r.rating;
+        const timestampValue = r.timestamp;
+        
+        return `
+            <div class="review-item" style="background:#f8fafc; padding:12px; border-radius:12px; margin-bottom:10px;">
+                <div class="review-header" style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                    <span class="review-user" onclick="viewProfile('${safeUserId}')" style="font-weight:bold; color:#667eea; cursor:pointer;">${safeDisplayName}</span>
+                    <span class="review-rating" style="color:#f59e0b;">⭐ ${ratingValue}/10</span>
+                </div>
+                <div class="review-comment" style="margin:8px 0;">"${safeComment}"</div>
+                <div class="review-time" style="font-size:10px; color:#999;">${new Date(timestampValue).toLocaleString()}</div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    ${canReport ? `<button class="report-btn" 
+                        data-film-id="${safeString(id)}" 
+                        data-film-title="${safeFilmTitle}" 
+                        data-reported-user-id="${safeUserId}" 
+                        data-reported-by="${safeDisplayName}" 
+                        data-comment="${safeComment}" 
+                        data-rating="${ratingValue}" 
+                        data-timestamp="${timestampValue}"
+                        style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
+                    ${canDelete ? `<button class="admin-delete-comment-btn" onclick="adminDeleteRating('${safeString(id)}', '${safeUserId}', '${safeComment}', '${safeDisplayName}')" style="background:#dc2626; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-trash"></i> Hapus</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>';
+    
     const html = `
         <div id="filmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px; max-height:90vh; overflow-y:auto;">
@@ -595,25 +611,7 @@ function openFilmModal(id) {
                     
                     <h3><i class="fas fa-comments"></i> Semua Komentar</h3>
                     <div class="review-list" style="max-height:300px; overflow-y:auto;">
-                        ${ratings.filter(r => safeString(r.filmId) === safeString(id)).sort((a,b) => b.timestamp - a.timestamp).map(r => {
-                            const displayName = getDisplayNameFromObjectId(r.userId);
-                            const canReport = (currentUser || isAdminLoggedIn) && currentUser !== displayName;
-                            const canDelete = isAdminLoggedIn;
-                            return `
-                                <div class="review-item">
-                                    <div class="review-header">
-                                        <span class="review-user" onclick="viewProfile('${r.userId}')">${escapeHtml(displayName)}</span>
-                                        <span class="review-rating">⭐ ${r.rating}/10</span>
-                                    </div>
-                                    <div class="review-comment">"${escapeHtml(r.comment)}"</div>
-                                    <div class="review-time">${new Date(r.timestamp).toLocaleString()}</div>
-                                    <div style="display:flex; gap:8px; margin-top:8px;">
-                                        ${canReport ? `<button class="report-btn" type="button" onclick="event.stopPropagation(); showReportModal('${safeString(id)}', '${escapeHtml(film.title)}', '${safeString(r.userId)}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
-                                        ${canDelete ? `<button class="admin-delete-comment-btn" onclick="adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(displayName)}')"><i class="fas fa-trash"></i> Hapus</button>` : ''}
-                                    </div>
-                                </div>
-                            `;
-                        }).join('') || '<p style="text-align:center; padding:20px;">Belum ada komentar. Jadilah yang pertama!</p>'}
+                        ${reviewListHtml}
                     </div>
                 </div>
             </div>
@@ -621,6 +619,22 @@ function openFilmModal(id) {
     `;
     document.body.insertAdjacentHTML('beforeend', html);
     document.body.style.overflow = "hidden";
+    
+    // Attach event listener untuk tombol report
+    document.querySelectorAll('.report-btn').forEach(btn => {
+        btn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const filmId = btn.dataset.filmId;
+            const filmTitle = btn.dataset.filmTitle;
+            const reportedUserId = btn.dataset.reportedUserId;
+            const reportedByName = btn.dataset.reportedBy;
+            const comment = btn.dataset.comment;
+            const rating = parseInt(btn.dataset.rating);
+            const timestamp = parseInt(btn.dataset.timestamp);
+            showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp);
+        };
+    });
     
     if (uid) {
         const stars = document.querySelectorAll("#starSelector .star");
@@ -718,15 +732,20 @@ function addCommentToUI(comment) {
 
 // ==================== MODAL REPORT =======================
 function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    console.log('showReportModal called with:', { filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp });
+    console.log('🔍 showReportModal dipanggil');
+    
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        return;
+    }
     
     const existing = document.getElementById("reportModal");
     if (existing) existing.remove();
     
-    // Gunakan safeString untuk semua ID
-    const safeFilmId = String(filmId).replace(/[^a-zA-Z0-9]/g, '');
+    const cleanFilmId = safeString(filmId);
+    const cleanReportedUserId = safeString(reportedUserId);
     const safeFilmTitle = escapeHtml(filmTitle);
-    const safeReportedUserId = String(reportedUserId).replace(/[^a-zA-Z0-9]/g, '');
     const safeReportedByName = escapeHtml(reportedByName);
     const safeComment = escapeHtml(comment);
     
@@ -750,7 +769,7 @@ function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comm
                         <div style="font-size:11px; color:#666; margin-top:5px;">Minimal 5 karakter</div>
                     </div>
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="submitReport('${safeFilmId}', '${safeFilmTitle}', '${safeReportedUserId}', '${safeReportedByName}', '${safeComment}', ${rating}, ${timestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
+                        <button id="submitReportBtn" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
                         <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Batal</button>
                     </div>
                 </div>
@@ -760,6 +779,15 @@ function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comm
     
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.body.style.overflow = "hidden";
+    
+    const submitBtn = document.getElementById('submitReportBtn');
+    if (submitBtn) {
+        submitBtn.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            submitReport(cleanFilmId, filmTitle, cleanReportedUserId, reportedByName, comment, rating, timestamp);
+        };
+    }
     
     setTimeout(() => {
         const reasonTextarea = document.getElementById('reportReason');
@@ -775,23 +803,25 @@ function closeReportModal() {
 
 async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
     const reason = document.getElementById("reportReason")?.value.trim() || "";
+    
     if (!reason || reason.length < 5) {
         showToast("Harap isi alasan pelaporan (minimal 5 karakter)!", "warning");
         return;
     }
+    
     if (!currentUser && !isAdminLoggedIn) {
         showToast("Login dulu untuk melaporkan komentar!", "error");
         showAuthModal();
         closeReportModal();
         return;
     }
+    
     if (currentUser === reportedByName) {
         showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
         closeReportModal();
         return;
     }
     
-    // Konfirmasi sebelum kirim
     const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${reason}\n\nLaporan akan ditinjau oleh admin.`);
     if (!confirmed) return;
     
@@ -820,42 +850,6 @@ async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, c
     } catch (error) {
         console.error("Error reporting comment:", error);
         showToast("Gagal mengirim laporan!", "error");
-    }
-}
-
-function closeReportModal() {
-    const modal = document.getElementById("reportModal");
-    if (modal) modal.remove();
-    document.body.style.overflow = "";
-}
-
-async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
-    const reason = document.getElementById("reportReason")?.value.trim() || "";
-    if (!reason || reason.length < 5) {
-        showToast("Harap isi alasan pelaporan (minimal 5 karakter)!", "warning");
-        return;
-    }
-    if (!currentUser && !isAdminLoggedIn) {
-        showToast("Login dulu untuk melaporkan komentar!", "error");
-        showAuthModal();
-        closeReportModal();
-        return;
-    }
-    const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${reason}\n\nLaporan akan ditinjau oleh admin.`);
-    if (!confirmed) return;
-    const res = await apiCall('/api/reports', {
-        method: 'POST',
-        body: JSON.stringify({
-            filmId, filmTitle, reportedUserId, reportedByName,
-            reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
-            comment, rating, timestamp, reportReason: reason
-        })
-    });
-    if (res?.success) {
-        showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
-        closeReportModal();
-    } else {
-        showToast(res?.message || "Gagal mengirim laporan!", "error");
     }
 }
 
@@ -1275,22 +1269,17 @@ function openAddFilmModal() {
         <div id="addFilmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
-                    <h2 style="color:white;"><i class="fas fa-plus-circle"></i> Tambah Film Baru</h2>
+                    <h2><i class="fas fa-plus-circle"></i> Tambah Film Baru</h2>
                     <span class="close-modal" onclick="closeAddFilmModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <div class="form-group"><label>Judul Film</label><input type="text" id="newFilmTitle" placeholder="Contoh: Inception"></div>
-                    <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                        <div class="form-group"><label>Tahun Rilis</label><input type="number" id="newFilmYear" placeholder="2024"></div>
-                        <div class="form-group"><label>URL Poster</label><input type="text" id="newFilmPoster" placeholder="https://..."></div>
-                    </div>
+                    <div class="form-row"><div class="form-group"><label>Tahun Rilis</label><input type="number" id="newFilmYear" placeholder="2024"></div>
+                    <div class="form-group"><label>URL Poster</label><input type="text" id="newFilmPoster" placeholder="https://..."></div></div>
                     <div class="form-group"><label>URL Trailer</label><input type="text" id="newFilmTrailer" placeholder="https://youtube.com/..."></div>
                     <div class="form-group"><label>Sinopsis</label><textarea id="newFilmSynopsis" rows="4"></textarea></div>
                     <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="newFilmActors" placeholder="Tom Hanks, Leonardo DiCaprio"></div>
-                    <div class="modal-actions">
-                        <button onclick="addNewFilm()" class="modal-btn modal-btn-primary">Tambah Film</button>
-                        <button onclick="closeAddFilmModal()" class="modal-btn modal-btn-secondary">Batal</button>
-                    </div>
+                    <div class="modal-actions"><button onclick="addNewFilm()" class="modal-btn modal-btn-primary">Tambah Film</button><button onclick="closeAddFilmModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
                 </div>
             </div>
         </div>
@@ -1308,23 +1297,18 @@ function openEditFilmModal(id) {
         <div id="editFilmModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content large" style="background:white; max-width:800px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
-                    <h2 style="color:white;"><i class="fas fa-edit"></i> Edit Film</h2>
+                    <h2><i class="fas fa-edit"></i> Edit Film</h2>
                     <span class="close-modal" onclick="closeEditFilmModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <input type="hidden" id="editFilmId" value="${film.id}">
                     <div class="form-group"><label>Judul</label><input type="text" id="editFilmTitle" value="${escapeHtml(film.title)}"></div>
-                    <div class="form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                        <div class="form-group"><label>Tahun</label><input type="number" id="editFilmYear" value="${film.year}"></div>
-                        <div class="form-group"><label>URL Poster</label><input type="text" id="editFilmPoster" value="${film.posterUrl}"></div>
-                    </div>
+                    <div class="form-row"><div class="form-group"><label>Tahun</label><input type="number" id="editFilmYear" value="${film.year}"></div>
+                    <div class="form-group"><label>URL Poster</label><input type="text" id="editFilmPoster" value="${film.posterUrl}"></div></div>
                     <div class="form-group"><label>URL Trailer</label><input type="text" id="editFilmTrailer" value="${film.trailer}"></div>
                     <div class="form-group"><label>Sinopsis</label><textarea id="editFilmSynopsis" rows="4">${escapeHtml(film.synopsis)}</textarea></div>
                     <div class="form-group"><label>Aktor (pisah koma)</label><input type="text" id="editFilmActors" value="${film.actors ? film.actors.join(', ') : ''}"></div>
-                    <div class="modal-actions">
-                        <button onclick="updateFilm()" class="modal-btn modal-btn-primary">Simpan</button>
-                        <button onclick="closeEditFilmModal()" class="modal-btn modal-btn-secondary">Batal</button>
-                    </div>
+                    <div class="modal-actions"><button onclick="updateFilm()" class="modal-btn modal-btn-primary">Simpan</button><button onclick="closeEditFilmModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
                 </div>
             </div>
         </div>
@@ -1339,17 +1323,14 @@ function openAddActorModal() {
         <div id="addActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
-                    <h2 style="color:white;"><i class="fas fa-user-plus"></i> Tambah Aktor</h2>
+                    <h2><i class="fas fa-user-plus"></i> Tambah Aktor</h2>
                     <span class="close-modal" onclick="closeAddActorModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <div class="form-group"><label>Nama Aktor</label><input type="text" id="newActorName" placeholder="Tom Hanks"></div>
                     <div class="form-group"><label>Bio</label><textarea id="newActorBio" rows="3"></textarea></div>
                     <div class="form-group"><label>Foto URL</label><input type="text" id="newActorPhotoUrl" placeholder="https://... (opsional)"></div>
-                    <div class="modal-actions">
-                        <button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button>
-                        <button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
-                    </div>
+                    <div class="modal-actions"><button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button><button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
                 </div>
             </div>
         </div>
@@ -1366,18 +1347,15 @@ function openEditActorModal(name) {
         <div id="editActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
-                    <h2 style="color:white;"><i class="fas fa-edit"></i> Edit Aktor</h2>
+                    <h2><i class="fas fa-edit"></i> Edit Aktor</h2>
                     <span class="close-modal" onclick="closeEditActorModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <input type="hidden" id="editActorId" value="${actor.id}">
                     <div class="form-group"><label>Nama</label><input type="text" id="editActorName" value="${escapeHtml(actor.name)}"></div>
                     <div class="form-group"><label>Bio</label><textarea id="editActorBio" rows="3">${escapeHtml(actor.bio)}</textarea></div>
                     <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}"></div>
-                    <div class="modal-actions">
-                        <button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button>
-                        <button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
-                    </div>
+                    <div class="modal-actions"><button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button><button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
                 </div>
             </div>
         </div>
@@ -1397,10 +1375,10 @@ function openSettingModal() {
         <div id="settingModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
-                    <h2 style="color:white;"><i class="fas fa-user-edit"></i> Edit Profil</h2>
+                    <h2><i class="fas fa-user-edit"></i> Edit Profil</h2>
                     <span class="close-modal" onclick="closeSettingModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <div style="text-align:center;"><img id="avatarPreview" src="${avatar}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;"><br><button class="login-btn" onclick="document.getElementById('avatarUpload').click()">Upload Foto</button><input type="file" id="avatarUpload" accept="image/*" style="display:none;"></div>
                     <div class="form-group"><label>Nama Tampilan</label><input type="text" id="settingDisplayName" value="${escapeHtml(prof.displayName)}"></div>
                     <div class="form-group"><label>Bio</label><textarea id="settingBio" rows="3">${escapeHtml(prof.bio)}</textarea></div>
