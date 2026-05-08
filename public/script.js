@@ -482,11 +482,46 @@ async function adminDeleteActor(actorName) {
 }
 
 async function rateActor(actorName, rating) {
-    if (!currentUser && !isAdminLoggedIn) { showToast("Login dulu!", "error"); showAuthModal(); return; }
+        if (!currentUser && !isAdminLoggedIn) { 
+        showToast("Login dulu!", "error"); 
+        showAuthModal(); 
+        return; 
+    }
     const userId = isAdminLoggedIn ? "admin" : currentUser;
-    const res = await apiCall('/api/actor-ratings', { method: 'POST', body: JSON.stringify({ actorName, userId, rating }) });
-    if (res?.success) { showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success"); if (currentView === 'topactors') renderTopActors(); }
-    else showToast("Gagal menyimpan rating!", "error");
+    const res = await apiCall('/api/actor-ratings', { 
+        method: 'POST', 
+        body: JSON.stringify({ actorName, userId, rating }) 
+    });
+    
+    if (res?.success) {
+        showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success");
+        
+        // Update local data agar bintang langsung berubah tanpa reload
+        const existingRatingIndex = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
+        if (existingRatingIndex !== -1) {
+            // Update rating yang sudah ada
+            actorRatingsByUser[existingRatingIndex].rating = rating;
+            actorRatingsByUser[existingRatingIndex].timestamp = new Date();
+        } else {
+            // Tambah rating baru
+            actorRatingsByUser.push({
+                actorName: actorName,
+                userId: userId,
+                rating: rating,
+                timestamp: new Date()
+            });
+        }
+        
+        // Update juga rating untuk keperluan rata-rata di getTopActors
+        // Karena getTopActors menggunakan actorRatingsByUser, data sudah terupdate
+        
+        // Re-render halaman top actors jika sedang aktif
+        if (currentView === 'topactors') {
+            renderTopActors();
+        }
+    } else {
+        showToast("Gagal menyimpan rating!", "error");
+    }
 }
 
 // ==================== WATCHLIST =======================
