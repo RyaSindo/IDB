@@ -148,11 +148,55 @@ function initSocket() {
             socket.connect();
         }
     });
-    socket.on('film-rating-updated', () => refreshCurrentView());
-    socket.on('actor-added', () => { if (currentView === 'topactors') refreshCurrentView(); });
-    socket.on('actor-updated', () => { if (currentView === 'topactors') refreshCurrentView(); });
-    socket.on('actor-deleted', () => { if (currentView === 'topactors') refreshCurrentView(); });
-    socket.on('actor-rating-updated', () => { if (currentView === 'topactors') refreshCurrentView(); });
+    socket.on('film-rating-updated', () => {
+        if (currentView === 'beranda' || currentView === 'toprating') {
+            // Hanya update data lokal, bukan refresh penuh
+            loadData(false); // force = false, hanya update jika perlu
+            render();
+        }
+    });
+    socket.on('actor-added', () => { 
+        if (currentView === 'topactors') {
+            loadData(false);
+            renderTopActors(); 
+        }
+    });
+    socket.on('actor-updated', () => { 
+        if (currentView === 'topactors') {
+            loadData(false);
+            renderTopActors(); 
+        }
+    });
+    socket.on('actor-deleted', () => { 
+    if (currentView === 'topactors') {
+        loadData(false);
+        renderTopActors(); 
+    }
+});
+//     socket.on('actor-rating-updated', (data) => {
+//     console.log('⭐ Actor rating updated', data);
+//     // Hanya update data lokal, jangan refresh seluruh view
+//     // Karena refresh akan menyebabkan render ulang dan bintang berubah kembali
+    
+//     // Update actorRatingsByUser lokal
+//     const existingIndex = actorRatingsByUser.findIndex(r => r.actorName === data.actorName && r.userId === data.userId);
+//     if (existingIndex !== -1) {
+//         actorRatingsByUser[existingIndex].rating = data.rating;
+//         actorRatingsByUser[existingIndex].timestamp = new Date();
+//     } else {
+//         actorRatingsByUser.push({
+//             actorName: data.actorName,
+//             userId: data.userId,
+//             rating: data.rating,
+//             timestamp: new Date()
+//         });
+//     }
+    
+//     // Hanya rerender halaman top actors jika sedang aktif, TANPA loadData
+//     if (currentView === 'topactors') {
+//         renderTopActors();
+//     }
+// });
     socket.on('new-comment', (data) => {
         if (safeString(currentFilmId) === safeString(data.filmId) && document.getElementById('filmModal')) {
             addCommentToUI(data);
@@ -482,12 +526,35 @@ async function adminDeleteActor(actorName) {
 }
 
 async function rateActor(actorName, rating) {
-        if (!currentUser && !isAdminLoggedIn) { 
+    if (!currentUser && !isAdminLoggedIn) { 
         showToast("Login dulu!", "error"); 
         showAuthModal(); 
         return; 
     }
     const userId = isAdminLoggedIn ? "admin" : currentUser;
+    
+    // Simpan rating lama untuk rollback jika gagal
+    const oldRatingIndex = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
+    const oldRating = oldRatingIndex !== -1 ? actorRatingsByUser[oldRatingIndex].rating : null;
+    
+    // UPDATE UI SEGERA (optimistic update)
+    if (oldRatingIndex !== -1) {
+        actorRatingsByUser[oldRatingIndex].rating = rating;
+    } else {
+        actorRatingsByUser.push({
+            actorName: actorName,
+            userId: userId,
+            rating: rating,
+            timestamp: new Date()
+        });
+    }
+    
+    // Langsung render ulang halaman top actors
+    if (currentView === 'topactors') {
+        renderTopActors();
+    }
+    
+    // Kirim ke server
     const res = await apiCall('/api/actor-ratings', { 
         method: 'POST', 
         body: JSON.stringify({ actorName, userId, rating }) 
@@ -495,32 +562,24 @@ async function rateActor(actorName, rating) {
     
     if (res?.success) {
         showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success");
-        
-        // Update local data agar bintang langsung berubah tanpa reload
-        const existingRatingIndex = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
-        if (existingRatingIndex !== -1) {
-            // Update rating yang sudah ada
-            actorRatingsByUser[existingRatingIndex].rating = rating;
-            actorRatingsByUser[existingRatingIndex].timestamp = new Date();
+        // Data sudah benar, tidak perlu reload
+    } else {
+        // Rollback jika gagal
+        if (oldRating !== null) {
+            if (oldRatingIndex !== -1) {
+                actorRatingsByUser[oldRatingIndex].rating = oldRating;
+            }
         } else {
-            // Tambah rating baru
-            actorRatingsByUser.push({
-                actorName: actorName,
-                userId: userId,
-                rating: rating,
-                timestamp: new Date()
-            });
+            // Hapus rating yang baru ditambahkan
+            const idx = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
+            if (idx !== -1) {
+                actorRatingsByUser.splice(idx, 1);
+            }
         }
-        
-        // Update juga rating untuk keperluan rata-rata di getTopActors
-        // Karena getTopActors menggunakan actorRatingsByUser, data sudah terupdate
-        
-        // Re-render halaman top actors jika sedang aktif
+        showToast("Gagal menyimpan rating!", "error");
         if (currentView === 'topactors') {
             renderTopActors();
         }
-    } else {
-        showToast("Gagal menyimpan rating!", "error");
     }
 }
 
