@@ -27,13 +27,22 @@ cloudinary.config({
 // Socket.IO
 const server = http.createServer(app);
 const io = socketIo(server, {
-    cors: { origin: "*", credentials: true },
+    cors: { 
+        origin: "*", 
+        credentials: true,
+        methods: ["GET", "POST"]
+    },
     transports: ['websocket', 'polling'],
     allowEIO3: true,
     pingTimeout: 60000,
-    pingInterval: 25000
+    pingInterval: 25000,
+    upgradeTimeout: 10000,
+    allowUpgrades: true,
+    cookie: false,
+    path: '/socket.io/'
 });
 
+// Log connection errors
 io.engine.on("connection_error", (err) => {
     console.log("Socket.IO connection error:", err.message);
 });

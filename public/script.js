@@ -147,10 +147,12 @@ function initSocket() {
     socket = io({
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
-        timeout: 20000
+        timeout: 20000,
+        upgrade: true,
+        forceNew: false
     });
     
     socket.on('connect', () => {
@@ -159,8 +161,9 @@ function initSocket() {
     
     socket.on('connect_error', (error) => {
         console.log('Socket connection error:', error);
-        // Fallback ke polling saja jika websocket gagal
+        // Coba fallback ke polling
         if (socket.io.opts.transports[0] !== 'polling') {
+            console.log('Falling back to polling transport');
             socket.io.opts.transports = ['polling'];
             socket.connect();
         }
@@ -605,7 +608,7 @@ function openFilmModal(id) {
                                     <div class="review-comment">"${escapeHtml(r.comment)}"</div>
                                     <div class="review-time">${new Date(r.timestamp).toLocaleString()}</div>
                                     <div style="display:flex; gap:8px; margin-top:8px;">
-                                        ${canReport ? `<button class="report-btn" onclick="showReportModal('${id}', '${escapeHtml(film.title)}', '${r.userId}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
+                                        ${canReport ? `<button class="report-btn" type="button" onclick="event.stopPropagation(); showReportModal('${safeString(id)}', '${escapeHtml(film.title)}', '${safeString(r.userId)}', '${escapeHtml(displayName)}', '${escapeHtml(r.comment)}', ${r.rating}, ${r.timestamp})" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:20px; font-size:11px; cursor:pointer;"><i class="fas fa-flag"></i> Laporkan</button>` : ''}
                                         ${canDelete ? `<button class="admin-delete-comment-btn" onclick="adminDeleteRating('${id}', '${r.userId}', '${escapeHtml(r.comment)}', '${escapeHtml(displayName)}')"><i class="fas fa-trash"></i> Hapus</button>` : ''}
                                     </div>
                                 </div>
@@ -715,42 +718,109 @@ function addCommentToUI(comment) {
 
 // ==================== MODAL REPORT =======================
 function showReportModal(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    console.log('showReportModal called with:', { filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp });
+    
     const existing = document.getElementById("reportModal");
     if (existing) existing.remove();
+    
+    // Gunakan safeString untuk semua ID
+    const safeFilmId = String(filmId).replace(/[^a-zA-Z0-9]/g, '');
+    const safeFilmTitle = escapeHtml(filmTitle);
+    const safeReportedUserId = String(reportedUserId).replace(/[^a-zA-Z0-9]/g, '');
+    const safeReportedByName = escapeHtml(reportedByName);
+    const safeComment = escapeHtml(comment);
     
     const modalHtml = `
         <div id="reportModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:2000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
-                <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626); padding:16px 20px; border-radius:20px 20px 0 0;">
+                <div class="modal-header" style="background:linear-gradient(135deg,#ef4444,#dc2626); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
                     <h2 style="color:white;"><i class="fas fa-flag"></i> Laporkan Komentar</h2>
                     <span class="close-modal" onclick="closeReportModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
                 </div>
                 <div class="modal-body" style="padding:20px;">
                     <div style="margin-bottom:15px; padding:12px; background:#fef3c7; border-radius:12px;">
-                        <div><strong>👤 Penulis:</strong> ${escapeHtml(reportedByName)}</div>
-                        <div><strong>💬 Komentar:</strong> "${escapeHtml(comment)}"</div>
+                        <div><strong>👤 Penulis:</strong> ${safeReportedByName}</div>
+                        <div><strong>💬 Komentar:</strong> "${safeComment}"</div>
                         <div><strong>⭐ Rating:</strong> ${rating}/10</div>
-                        <div><strong>🎬 Film:</strong> ${escapeHtml(filmTitle)}</div>
+                        <div><strong>🎬 Film:</strong> ${safeFilmTitle}</div>
                     </div>
                     <div class="form-group">
-                        <label style="font-weight:600;">Alasan Melaporkan <span style="color:red;">*</span></label>
-                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px;"></textarea>
+                        <label style="font-weight:600; margin-bottom:8px; display:block;">Alasan Melaporkan <span style="color:red;">*</span></label>
+                        <textarea id="reportReason" rows="4" placeholder="Jelaskan alasan Anda melaporkan komentar ini..." style="width:100%; padding:12px; border:1px solid #ddd; border-radius:12px; font-family:inherit; resize:vertical;"></textarea>
                         <div style="font-size:11px; color:#666; margin-top:5px;">Minimal 5 karakter</div>
                     </div>
                     <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="submitReport('${filmId}', '${escapeHtml(filmTitle)}', '${reportedUserId}', '${escapeHtml(reportedByName)}', '${escapeHtml(comment)}', ${rating}, ${timestamp})" class="modal-btn modal-btn-primary" style="background:#ef4444;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
-                        <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary">Batal</button>
+                        <button onclick="submitReport('${safeFilmId}', '${safeFilmTitle}', '${safeReportedUserId}', '${safeReportedByName}', '${safeComment}', ${rating}, ${timestamp})" class="modal-btn modal-btn-primary" style="flex:1; background:#ef4444; color:white; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-paper-plane"></i> Kirim Laporan</button>
+                        <button onclick="closeReportModal()" class="modal-btn modal-btn-secondary" style="flex:1; background:#e2e8f0; border:none; padding:10px; border-radius:40px; cursor:pointer;"><i class="fas fa-times"></i> Batal</button>
                     </div>
                 </div>
             </div>
         </div>
     `;
+    
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.body.style.overflow = "hidden";
+    
     setTimeout(() => {
         const reasonTextarea = document.getElementById('reportReason');
         if (reasonTextarea) reasonTextarea.focus();
     }, 100);
+}
+
+function closeReportModal() {
+    const modal = document.getElementById("reportModal");
+    if (modal) modal.remove();
+    document.body.style.overflow = "";
+}
+
+async function submitReport(filmId, filmTitle, reportedUserId, reportedByName, comment, rating, timestamp) {
+    const reason = document.getElementById("reportReason")?.value.trim() || "";
+    if (!reason || reason.length < 5) {
+        showToast("Harap isi alasan pelaporan (minimal 5 karakter)!", "warning");
+        return;
+    }
+    if (!currentUser && !isAdminLoggedIn) {
+        showToast("Login dulu untuk melaporkan komentar!", "error");
+        showAuthModal();
+        closeReportModal();
+        return;
+    }
+    if (currentUser === reportedByName) {
+        showToast("Anda tidak bisa melaporkan komentar Anda sendiri!", "warning");
+        closeReportModal();
+        return;
+    }
+    
+    // Konfirmasi sebelum kirim
+    const confirmed = confirm(`Kirim laporan untuk komentar dari "${reportedByName}"?\n\nAlasan: ${reason}\n\nLaporan akan ditinjau oleh admin.`);
+    if (!confirmed) return;
+    
+    try {
+        const res = await apiCall('/api/reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                filmId: filmId,
+                filmTitle: filmTitle,
+                reportedUserId: reportedUserId,
+                reportedByName: reportedByName,
+                reportedBy: currentUser || (isAdminLoggedIn ? "admin" : "anonymous"),
+                comment: comment,
+                rating: rating,
+                timestamp: timestamp,
+                reportReason: reason
+            })
+        });
+        
+        if (res?.success) {
+            showToast("Laporan terkirim! Terima kasih atas bantuannya.", "success");
+            closeReportModal();
+        } else {
+            showToast(res?.message || "Gagal mengirim laporan!", "error");
+        }
+    } catch (error) {
+        console.error("Error reporting comment:", error);
+        showToast("Gagal mengirim laporan!", "error");
+    }
 }
 
 function closeReportModal() {
