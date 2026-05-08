@@ -1058,21 +1058,20 @@ function renderTopActors() {
                     <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
                         <div style="display:flex; align-items:center; gap:4px;">
                             ${renderActorStars(parseFloat(a.avgRating))}
-                            <span>(${a.avgRating}/5)</span>
+                            <span>(${a.avgRating}/5 dari ${a.ratingCount} rating)</span>
                         </div>
-                        <div>👤 ${a.ratingCount} rating</div>
                     </div>
                     ${isLoggedIn ? `
-                        <div class="actor-stars-modern" style="display:flex; gap:5px; margin:8px 0; align-items:center;">
-                            ${[1,2,3,4,5].map(s => `<i class="fas fa-star" style="font-size:24px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'};" onclick="rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
-                            <span style="margin-left:8px; font-size:13px;">Rating Anda: ${userRatingValue}/5</span>
+                        <div class="actor-stars-modern" style="display:flex; flex-direction:column; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid #eef2f6;">
+                            <label style="font-size:13px; color:#666;"><i class="fas fa-star" style="color:#f59e0b;"></i> Rating Kamu:</label>
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                ${[1,2,3,4,5].map(s => `<i class="fas fa-star" style="font-size:28px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;" onclick="rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
+                                <span style="margin-left:12px; font-size:14px; color:#666;">${userRatingValue}/5</span>
+                            </div>
                         </div>
-                        <div style="font-size:12px; color:#666; margin-top:4px;">
-                            ${renderActorStars(userRatingValue)} (${userRatingValue}/5 bintang)
-                        </div>
-                    ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:8px;">Login untuk Rating</button>`}
+                    ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}
                     ${isAdminLoggedIn ? `
-                        <div style="margin-top:8px; display:flex; gap:8px;">
+                        <div style="margin-top:12px; display:flex; gap:8px;">
                             <button onclick="openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
                             <button onclick="adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn">Hapus</button>
                         </div>
