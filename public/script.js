@@ -65,7 +65,7 @@ function showAuthModal() {
                         <div class="form-group"><label>Username</label><input type="text" id="loginUsername" placeholder="Masukkan username"></div>
                         <div class="form-group"><label>Password</label><input type="password" id="loginPassword" placeholder="Masukkan password"></div>
                         <button onclick="doLogin()" class="modal-btn modal-btn-primary">Login</button>
-                        <div class="toggle-form">Belum punya akun? <span onclick="showRegisterForm()"><p style="color:blue;">Daftar sekarang</p></span></div>
+                        <div class="toggle-form">Belum punya akun? <span onclick="showRegisterForm()"><p style="color:blue;cursor:pointer;">Daftar sekarang</p></span></div>
                     </div>
                     <div id="registerForm" style="display:none;">
                         <div class="form-group"><label>Username</label><input type="text" id="regUsername" placeholder="Pilih username"></div>
