@@ -454,18 +454,20 @@ app.put('/api/actors/:id', async (req, res) => {
         const old = await Actor.findById(id);
         if (!old) return res.status(404).json({ success: false });
 
-        // Sinkronisasi film
+        // --- SINKRONISASI FILM ---
         const oldFilms = old.filmsList || [];
         const newFilms = filmsList || [];
         const filmsToAdd = newFilms.filter(f => !oldFilms.includes(f));
         const filmsToRemove = oldFilms.filter(f => !newFilms.includes(f));
 
+        // Tambah actor ke film
         for (const filmTitle of filmsToAdd) {
             await Film.updateOne(
                 { title: filmTitle },
                 { $addToSet: { actors: name } }
             );
         }
+        // Hapus actor dari film
         for (const filmTitle of filmsToRemove) {
             await Film.updateOne(
                 { title: filmTitle },
@@ -473,7 +475,7 @@ app.put('/api/actors/:id', async (req, res) => {
             );
         }
 
-        // Update actor (termasuk jika nama berubah)
+        // Update data actor (termasuk jika nama berubah)
         let photoUrl = photo;
         if (photo && photo.startsWith('data:image/')) {
             const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
@@ -486,7 +488,7 @@ app.put('/api/actors/:id', async (req, res) => {
             { new: true }
         );
 
-        // Jika nama berubah, update juga di film dan actorRating
+        // Jika nama actor berubah, update juga di film dan actorRating
         if (old.name !== name) {
             await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
             await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
