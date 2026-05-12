@@ -573,9 +573,21 @@ async function rateActor(actorName, rating) {
         });
     }
     
-    // Langsung render ulang halaman top actors
+    // Langsung render ulang halaman top actors jika sedang aktif
     if (currentView === 'topactors') {
         renderTopActors();
+    }
+    
+    // Update modal actor jika terbuka
+    const actorModal = document.getElementById('actorModal');
+    if (actorModal) {
+        const stars = actorModal.querySelectorAll('.fa-star[data-actor]');
+        stars.forEach(s => {
+            const r = parseInt(s.dataset.rating);
+            s.style.color = rating >= r ? '#f59e0b' : '#cbd5e0';
+        });
+        const ratingSpan = actorModal.querySelector('.modal-body .fa-star[data-actor] + span');
+        if (ratingSpan) ratingSpan.textContent = `${rating}/5`;
     }
     
     // Kirim ke server
@@ -586,7 +598,6 @@ async function rateActor(actorName, rating) {
     
     if (res?.success) {
         showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success");
-        // Data sudah benar, tidak perlu reload
     } else {
         // Rollback jika gagal
         if (oldRating !== null) {
@@ -594,7 +605,6 @@ async function rateActor(actorName, rating) {
                 actorRatingsByUser[oldRatingIndex].rating = oldRating;
             }
         } else {
-            // Hapus rating yang baru ditambahkan
             const idx = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
             if (idx !== -1) {
                 actorRatingsByUser.splice(idx, 1);
@@ -603,6 +613,16 @@ async function rateActor(actorName, rating) {
         showToast("Gagal menyimpan rating!", "error");
         if (currentView === 'topactors') {
             renderTopActors();
+        }
+        // Rollback modal
+        if (actorModal && oldRating !== null) {
+            const stars = actorModal.querySelectorAll('.fa-star[data-actor]');
+            stars.forEach(s => {
+                const r = parseInt(s.dataset.rating);
+                s.style.color = oldRating >= r ? '#f59e0b' : '#cbd5e0';
+            });
+            const ratingSpan = actorModal.querySelector('.modal-body .fa-star[data-actor] + span');
+            if (ratingSpan) ratingSpan.textContent = `${oldRating}/5`;
         }
     }
 }
@@ -846,6 +866,123 @@ function addCommentToUI(comment) {
         const newComment = reviewList.firstElementChild;
         if (newComment) newComment.style.background = '#f8fafc';
     }, 1000);
+}
+
+// ==================== MODAL ACTOR =======================
+function openActorModal(actorName) {
+    const actor = actors.find(a => a.name === actorName);
+    if (!actor) {
+        console.error('Actor tidak ditemukan:', actorName);
+        return;
+    }
+    
+    const avgRating = actor.avgRating || "0.0";
+    const ratingCount = actor.ratingCount || 0;
+    const userRatingValue = actor.userRating?.rating || 0;
+    const isLoggedIn = !!(currentUser || isAdminLoggedIn);
+    const userId = isAdminLoggedIn ? "admin" : currentUser;
+    
+    // Cari film-film yang dibintangi actor
+    const actorFilms = films.filter(f => f.actors && f.actors.includes(actor.name));
+    
+    const filmsHtml = actorFilms.length > 0 ? `
+        <div style="margin-top:20px;">
+            <h3 style="margin-bottom:15px;"><i class="fas fa-film"></i> Film yang Dibintangi</h3>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:15px;">
+                ${actorFilms.map(film => `
+                    <div class="actor-film-card" style="background:#f8fafc; border-radius:12px; overflow:hidden; cursor:pointer; transition:all 0.2s;" onclick="closeActorModal(); openFilmModal('${film.id}')">
+                        <img src="${film.posterUrl}" onerror="this.src='https://via.placeholder.com/150x220?text=No+Image'" style="width:100%; height:180px; object-fit:cover;">
+                        <div style="padding:10px;">
+                            <div style="font-weight:600; font-size:13px;">${escapeHtml(film.title)}</div>
+                            <div style="font-size:11px; color:#666;">${film.year}</div>
+                            <div style="font-size:11px; color:#f59e0b; margin-top:4px;">⭐ ${getAvgRating(film.id) || '-'}/10</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    ` : '<p style="color:#999; margin-top:20px;">Belum ada film yang diketahui untuk aktor ini.</p>';
+    
+    const modalHtml = `
+        <div id="actorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
+            <div class="modal-content large" style="background:white; max-width:600px; width:90%; border-radius:20px; max-height:90vh; overflow-y:auto;">
+                <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0; position:relative;">
+                    <h2 style="color:white;"><i class="fas fa-user"></i> ${escapeHtml(actor.name)}</h2>
+                    <span class="close-modal" onclick="closeActorModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
+                </div>
+                <div class="modal-body" style="padding:20px;">
+                    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+                        <img src="${actor.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(actor.name)}&background=667eea&color=fff'" style="width:120px; height:120px; border-radius:50%; object-fit:cover;">
+                        <div style="flex:1;">
+                            <div style="margin-bottom:15px;">
+                                <div style="font-size:14px; color:#666; margin-bottom:5px;">Rating Rata-rata</div>
+                                <div style="font-size:28px; font-weight:bold; color:#f59e0b;">${avgRating}/5</div>
+                                <div style="font-size:12px; color:#666;">dari ${ratingCount} rating</div>
+                            </div>
+                            ${isLoggedIn ? `
+                                <div>
+                                    <div style="font-size:14px; color:#666; margin-bottom:8px;">Rating Kamu:</div>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        ${[1,2,3,4,5].map(s => `
+                                            <i class="fas fa-star" 
+                                               data-actor="${escapeHtml(actor.name)}" 
+                                               data-rating="${s}" 
+                                               style="font-size:36px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
+                                            </i>
+                                        `).join('')}
+                                        <span style="margin-left:12px; font-size:16px;">${userRatingValue}/5</span>
+                                    </div>
+                                </div>
+                            ` : `
+                                <button onclick="closeActorModal(); showAuthModal()" class="login-btn" style="margin-top:10px;">Login untuk Rating</button>
+                            `}
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top:20px; padding-top:15px; border-top:1px solid #eef2f6;">
+                        <h3 style="margin-bottom:10px;"><i class="fas fa-align-left"></i> Bio</h3>
+                        <p style="line-height:1.6; color:#333;">${escapeHtml(actor.bio) || "Belum ada bio untuk aktor ini."}</p>
+                    </div>
+                    
+                    ${filmsHtml}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    document.body.style.overflow = "hidden";
+    
+    // Attach event listener untuk rating stars di modal
+    if (isLoggedIn) {
+        document.querySelectorAll('#actorModal .fa-star[data-actor]').forEach(star => {
+            star.onclick = (e) => {
+                e.stopPropagation();
+                const actorName = star.dataset.actor;
+                const rating = parseInt(star.dataset.rating);
+                rateActor(actorName, rating);
+                // Update tampilan rating di modal setelah rating berhasil
+                setTimeout(() => {
+                    const updatedActor = getTopActors().find(a => a.name === actorName);
+                    if (updatedActor) {
+                        const newRating = updatedActor.userRating?.rating || 0;
+                        document.querySelectorAll('#actorModal .fa-star[data-actor]').forEach(s => {
+                            const r = parseInt(s.dataset.rating);
+                            s.style.color = newRating >= r ? '#f59e0b' : '#cbd5e0';
+                        });
+                        const ratingSpan = document.querySelector('#actorModal .modal-body .fa-star[data-actor] + span');
+                        if (ratingSpan) ratingSpan.textContent = `${newRating}/5`;
+                    }
+                }, 100);
+            };
+        });
+    }
+}
+
+function closeActorModal() {
+    const modal = document.getElementById("actorModal");
+    if (modal) modal.remove();
+    document.body.style.overflow = "";
 }
 
 // ==================== MODAL REPORT =======================
@@ -1168,62 +1305,61 @@ function renderTopActors() {
         const userRatingValue = a.userRating?.rating || 0;
         
         // Buat daftar film yang pernah dibintangi
-        const filmsListHtml = a.filmsList && a.filmsList.length > 0 ? `
-            <div style="margin-top:8px;">
-                <div style="font-size:11px; color:#888;">🎬 Film:</div>
-                <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
-                    ${a.filmsList.map(f => `<span style="background:#eef2f6; padding:2px 8px; border-radius:20px; font-size:10px;">${escapeHtml(f)}</span>`).join('')}
-                </div>
-            </div>
-        ` : '';
+        const actorFilms = films.filter(f => f.actors && f.actors.includes(a.name));
+        const filmsPreviewHtml = actorFilms.slice(0, 3).map(f => `
+            <span style="background:#eef2f6; padding:2px 8px; border-radius:20px; font-size:10px; cursor:pointer;" onclick="event.stopPropagation(); openFilmModal('${f.id}')">${escapeHtml(f.title)}</span>
+        `).join('');
+        const moreFilmsHtml = actorFilms.length > 3 ? `<span style="background:#eef2f6; padding:2px 8px; border-radius:20px; font-size:10px;">+${actorFilms.length-3} lagi</span>` : '';
         
         html += `
-            <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; margin-bottom:16px; flex-direction:column;">
-                <div style="display:flex; gap:16px;">
-                    <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
-                    <div class="actor-info-modern" style="flex:1;">
-                        <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
-                        <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
-                        <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
-                            <div style="display:flex; align-items:center; gap:4px;">
-                                ${renderActorStars(parseFloat(a.avgRating))}
-                                <span>(${a.avgRating}/5 dari ${a.ratingCount} rating)</span>
+            <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; margin-bottom:16px; cursor:pointer;" onclick="openActorModal('${escapeHtml(a.name)}')">
+                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
+                <div class="actor-info-modern" style="flex:1;">
+                    <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
+                    <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
+                    <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            ${renderActorStars(parseFloat(a.avgRating))}
+                            <span>(${a.avgRating}/5 dari ${a.ratingCount} rating)</span>
+                        </div>
+                    </div>
+                    ${actorFilms.length > 0 ? `
+                        <div style="margin-top:8px;">
+                            <div style="font-size:11px; color:#888; margin-bottom:5px;">🎬 Film dibintangi:</div>
+                            <div style="display:flex; flex-wrap:wrap; gap:5px;">
+                                ${filmsPreviewHtml}
+                                ${moreFilmsHtml}
                             </div>
                         </div>
-                    </div>
+                    ` : ''}
+                    ${isLoggedIn ? `
+                        <div class="actor-rating-section" style="margin-top:12px; padding-top:12px; border-top:1px solid #eef2f6;">
+                            <div style="display:flex; gap:5px; align-items:center;">
+                                ${[1,2,3,4,5].map(s => `
+                                    <i class="fas fa-star rating-star" 
+                                       data-actor="${escapeHtml(a.name)}" 
+                                       data-rating="${s}" 
+                                       style="font-size:24px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
+                                    </i>
+                                `).join('')}
+                                <span style="margin-left:8px; font-size:13px; color:#666;">Rating Anda: ${userRatingValue}/5</span>
+                            </div>
+                        </div>
+                    ` : `<button onclick="event.stopPropagation(); showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}
+                    ${isAdminLoggedIn ? `
+                        <div style="margin-top:12px; display:flex; gap:8px;">
+                            <button onclick="event.stopPropagation(); openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
+                            <button onclick="event.stopPropagation(); adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn">Hapus</button>
+                        </div>
+                    ` : ''}
                 </div>
-                ${filmsListHtml}
-                ${isLoggedIn ? `
-                    <div class="actor-rating-section" style="margin-top:12px; padding-top:12px; border-top:1px solid #eef2f6;">
-                        <label style="font-size:13px; color:#666; margin-bottom:8px; display:block;"><i class="fas fa-star" style="color:#f59e0b;"></i> Beri Rating untuk ${escapeHtml(a.name)}:</label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            ${[1,2,3,4,5].map(s => `
-                                <i class="fas fa-star rating-star" 
-                                   data-actor="${escapeHtml(a.name)}" 
-                                   data-rating="${s}" 
-                                   style="font-size:32px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
-                                </i>
-                            `).join('')}
-                            <span style="margin-left:12px; font-size:14px; color:#666;">Rating Anda: ${userRatingValue}/5</span>
-                        </div>
-                        <div style="margin-top:6px; font-size:12px; color:#888;">
-                            ${renderActorStars(userRatingValue)} (${userRatingValue}/5 bintang)
-                        </div>
-                    </div>
-                ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}
-                ${isAdminLoggedIn ? `
-                    <div style="margin-top:12px; display:flex; gap:8px;">
-                        <button onclick="openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
-                        <button onclick="adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn">Hapus</button>
-                    </div>
-                ` : ''}
             </div>
         `;
     });
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
     
-    // Attach event listener untuk rating actor (sama seperti rating film)
+    // Attach event listener untuk rating actor
     document.querySelectorAll('.rating-star').forEach(star => {
         star.onclick = (e) => {
             e.stopPropagation();
@@ -1641,3 +1777,5 @@ window.closeReportModal = closeReportModal;
 window.submitReport = submitReport;
 window.adminDeleteRating = adminDeleteRating;
 window.filterReports = filterReports;
+window.openActorModal = openActorModal;
+window.closeActorModal = closeActorModal;
