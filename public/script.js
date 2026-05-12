@@ -165,44 +165,44 @@ function initSocket() {
     console.log('Actor updated received:', data);
     
     // Update data actor di array lokal
-    const updatedActor = data.actor;
-        if (updatedActor) {
-            const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
-            if (actorIndex !== -1) {
-                actors[actorIndex] = {
-                    ...actors[actorIndex],
-                    name: updatedActor.name,
-                    bio: updatedActor.bio,
-                    photoUrl: updatedActor.photoUrl,
-                    filmsList: updatedActor.filmsList || []
-                };
-            }
+        const updatedActor = data.actor;
+    if (updatedActor) {
+        const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
+        if (actorIndex !== -1) {
+            actors[actorIndex] = {
+                ...actors[actorIndex],
+                name: updatedActor.name,
+                bio: updatedActor.bio,
+                photoUrl: updatedActor.photoUrl,
+                filmsList: updatedActor.filmsList || []
+            };
+        }
         
             // Update juga film references jika ada perubahan nama actor
-            if (updatedActor.name) {
-                films.forEach(film => {
-                    if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
-                        const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
-                        if (actorIdx !== -1) {
-                            film.actors[actorIdx] = updatedActor.name;
-                        }
+                    if (updatedActor.name) {
+            films.forEach(film => {
+                if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
+                    const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
+                    if (actorIdx !== -1) {
+                        film.actors[actorIdx] = updatedActor.name;
                     }
-                });
-            }
+                }
+            });
         }
+    }
     
-        if (currentView === 'topactors') {
-            renderTopActors();
-        } else if (currentView === 'beranda') {
-            renderBeranda();
-        }
+    if (currentView === 'topactors') {
+        renderTopActors();
+    } else if (currentView === 'beranda') {
+        renderBeranda();
+    }
     
-        // Jika modal actor sedang terbuka, refresh isinya
-        const actorModal = document.getElementById('actorModal');
-        if (actorModal && updatedActor) {
-            closeActorModal();
-            setTimeout(() => openActorModal(updatedActor.name), 100);
-        }
+    // Jika modal actor sedang terbuka, refresh isinya
+    const actorModal = document.getElementById('actorModal');
+    if (actorModal && updatedActor) {
+        closeActorModal();
+        setTimeout(() => openActorModal(updatedActor.name), 100);
+    }
     });
     socket.on('actor-deleted', () => { 
     if (currentView === 'topactors') {
@@ -593,37 +593,6 @@ async function addNewActor() {
 }
 
 async function updateActor() {
-    if (!isAdminLoggedIn) return;
-    const id = document.getElementById("editActorId")?.value;
-    const name = document.getElementById("editActorName")?.value.trim();
-    const bio = document.getElementById("editActorBio")?.value.trim();
-    const photoUrl = document.getElementById("editActorPhotoUrl")?.value.trim();
-    const filmsSelect = document.getElementById("editActorFilms");
-    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
-    
-    console.log('Updating actor:', { id, name, bio, filmsList });
-    
-    const res = await apiCall(`/api/actors/${id}`, { 
-        method: 'PUT', 
-        body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
-    });
-    
-    if (res?.success) { 
-        // Refresh data dari server
-        await loadData(true);
-        closeEditActorModal(); 
-        showToast(`Aktor "${name}" diperbarui!`, "success");
-        
-        // Render ulang halaman yang sedang aktif
-        if (currentView === 'topactors') {
-            renderTopActors();
-        } else {
-            render();
-        }
-    } else {
-        showToast(res?.message || "Gagal update aktor!", "error");
-    }
-}async function updateActor() {
     if (!isAdminLoggedIn) return;
     const id = document.getElementById("editActorId")?.value;
     const name = document.getElementById("editActorName")?.value.trim();
