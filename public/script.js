@@ -623,7 +623,10 @@ async function updateActor() {
         
         // Refresh data dari server untuk memastikan sinkron
         await loadData(true);
-        
+
+        if (currentView === 'topactors') {
+            renderTopActors();
+        }
         closeEditActorModal(); 
         showToast(`Aktor "${name}" diperbarui!`, "success");
         
@@ -687,6 +690,11 @@ async function rateActor(actorName, rating) {
         });
         const ratingSpan = actorModal.querySelector('.modal-body .fa-star[data-actor] + span');
         if (ratingSpan) ratingSpan.textContent = `${rating}/5`;
+    }
+
+    if (actorModal && name) {
+        closeActorModal();
+        setTimeout(() => openActorModal(name), 200);
     }
     
     // Kirim ke server

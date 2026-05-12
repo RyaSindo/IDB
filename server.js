@@ -424,12 +424,25 @@ app.post('/api/actors', async (req, res) => {
         } else if (!photoUrl) {
             photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=667eea&color=fff`;
         }
+        
         const actor = new Actor({ name, bio: bio || "Aktor berbakat", photoUrl, filmsList: filmsList || [] });
         await actor.save();
+        
+        // Tambahkan actor ke film yang terdaftar di filmsList
+        if (filmsList && filmsList.length) {
+            for (const filmTitle of filmsList) {
+                await Film.updateOne(
+                    { title: filmTitle },
+                    { $addToSet: { actors: name } }
+                );
+            }
+        }
+        
         io.emit('actor-added', { actor });
         io.emit('show-toast', { message: `Aktor baru "${name}" ditambahkan`, type: 'info' });
         res.json({ success: true, actor });
     } catch (err) {
+        console.error('Error adding actor:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });
@@ -447,17 +460,49 @@ app.put('/api/actors/:id', async (req, res) => {
             photoUrl = result.secure_url;
         } else if (!photoUrl) photoUrl = old.photoUrl;
         
-        const updatedActor = await Actor.findByIdAndUpdate(
-            id, 
-            { name, bio, photoUrl, filmsList: filmsList || [] }, 
-            { new: true }  // Return the updated document
-        );
+        // --- SINKRONISASI FILM ---
+        const oldFilmsList = old.filmsList || [];
+        const newFilmsList = filmsList || [];
         
-        // Update film references jika nama aktor berubah
-        if (old.name !== name) {
-            await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
-            await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
+        // Film yang harus ditambahkan actor ke dalam field actors
+        const filmsToAdd = newFilmsList.filter(f => !oldFilmsList.includes(f));
+        // Film yang harus dihapus actor dari field actors
+        const filmsToRemove = oldFilmsList.filter(f => !newFilmsList.includes(f));
+        
+        // Tambahkan actor ke film
+        for (const filmTitle of filmsToAdd) {
+            await Film.updateOne(
+                { title: filmTitle },
+                { $addToSet: { actors: name } }
+            );
         }
+        
+        // Hapus actor dari film
+        for (const filmTitle of filmsToRemove) {
+            await Film.updateOne(
+                { title: filmTitle },
+                { $pull: { actors: name } }
+            );
+        }
+        
+        // Jika nama actor berubah, update juga di film
+        if (old.name !== name) {
+            await Film.updateMany(
+                { actors: old.name },
+                { $set: { "actors.$": name } }
+            );
+            await ActorRating.updateMany(
+                { actorName: old.name },
+                { $set: { actorName: name } }
+            );
+        }
+        
+        // Update actor
+        const updatedActor = await Actor.findByIdAndUpdate(
+            id,
+            { name, bio, photoUrl, filmsList: newFilmsList },
+            { new: true }
+        );
         
         io.emit('actor-updated', { actor: updatedActor });
         io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
