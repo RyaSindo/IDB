@@ -498,10 +498,22 @@ async function addNewActor() {
     const name = document.getElementById("newActorName")?.value.trim();
     const bio = document.getElementById("newActorBio")?.value.trim();
     const photoUrl = document.getElementById("newActorPhotoUrl")?.value.trim();
+    const filmsSelect = document.getElementById("newActorFilms");
+    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
+    
     if (!name) { showToast("Nama aktor harus diisi!", "error"); return; }
-    const res = await apiCall('/api/actors', { method: 'POST', body: JSON.stringify({ name, bio, photo: photoUrl }) });
-    if (res?.success) { await loadData(true); closeAddActorModal(); showToast(`Aktor "${name}" ditambahkan!`, "success"); render(); }
-    else showToast(res?.message || "Gagal menambah aktor!", "error");
+    const res = await apiCall('/api/actors', { 
+        method: 'POST', 
+        body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
+    });
+    if (res?.success) { 
+        await loadData(true); 
+        closeAddActorModal(); 
+        showToast(`Aktor "${name}" ditambahkan!`, "success"); 
+        render(); 
+    } else {
+        showToast(res?.message || "Gagal menambah aktor!", "error");
+    }
 }
 
 async function updateActor() {
@@ -510,9 +522,21 @@ async function updateActor() {
     const name = document.getElementById("editActorName")?.value.trim();
     const bio = document.getElementById("editActorBio")?.value.trim();
     const photoUrl = document.getElementById("editActorPhotoUrl")?.value.trim();
-    const res = await apiCall(`/api/actors/${id}`, { method: 'PUT', body: JSON.stringify({ name, bio, photo: photoUrl }) });
-    if (res?.success) { await loadData(true); closeEditActorModal(); showToast(`Aktor "${name}" diperbarui!`, "success"); render(); }
-    else showToast("Gagal update aktor!", "error");
+    const filmsSelect = document.getElementById("editActorFilms");
+    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
+    
+    const res = await apiCall(`/api/actors/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
+    });
+    if (res?.success) { 
+        await loadData(true); 
+        closeEditActorModal(); 
+        showToast(`Aktor "${name}" diperbarui!`, "success"); 
+        render(); 
+    } else {
+        showToast("Gagal update aktor!", "error");
+    }
 }
 
 async function adminDeleteActor(actorName) {
@@ -1143,39 +1167,71 @@ function renderTopActors() {
         const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `#${i+1}`));
         const userRatingValue = a.userRating?.rating || 0;
         
+        // Buat daftar film yang pernah dibintangi
+        const filmsListHtml = a.filmsList && a.filmsList.length > 0 ? `
+            <div style="margin-top:8px;">
+                <div style="font-size:11px; color:#888;">🎬 Film:</div>
+                <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:4px;">
+                    ${a.filmsList.map(f => `<span style="background:#eef2f6; padding:2px 8px; border-radius:20px; font-size:10px;">${escapeHtml(f)}</span>`).join('')}
+                </div>
+            </div>
+        ` : '';
+        
         html += `
-            <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; margin-bottom:16px;">
-                <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
-                <div class="actor-info-modern" style="flex:1;">
-                    <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
-                    <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
-                    <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
-                        <div style="display:flex; align-items:center; gap:4px;">
-                            ${renderActorStars(parseFloat(a.avgRating))}
-                            <span>(${a.avgRating}/5 dari ${a.ratingCount} rating)</span>
-                        </div>
-                    </div>
-                    ${isLoggedIn ? `
-                        <div class="actor-stars-modern" style="display:flex; flex-direction:column; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid #eef2f6;">
-                            <label style="font-size:13px; color:#666;"><i class="fas fa-star" style="color:#f59e0b;"></i> Rating Kamu:</label>
-                            <div style="display:flex; gap:5px; align-items:center;">
-                                ${[1,2,3,4,5].map(s => `<i class="fas fa-star" style="font-size:28px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;" onclick="rateActor('${escapeHtml(a.name)}', ${s})"></i>`).join('')}
-                                <span style="margin-left:12px; font-size:14px; color:#666;">${userRatingValue}/5</span>
+            <div class="actor-card" style="background:white; border-radius:16px; padding:16px; display:flex; gap:16px; margin-bottom:16px; flex-direction:column;">
+                <div style="display:flex; gap:16px;">
+                    <img class="actor-avatar-circle" src="${a.photoUrl}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=667eea&color=fff'" style="width:70px; height:70px; border-radius:50%; object-fit:cover;">
+                    <div class="actor-info-modern" style="flex:1;">
+                        <div class="actor-name-modern" style="font-size:18px; font-weight:bold;">${medal} ${escapeHtml(a.name)}</div>
+                        <div class="actor-bio-modern" style="font-size:12px; color:#666; margin:4px 0;">${escapeHtml(a.bio)}</div>
+                        <div style="display:flex; gap:16px; align-items:center; margin:8px 0;">
+                            <div style="display:flex; align-items:center; gap:4px;">
+                                ${renderActorStars(parseFloat(a.avgRating))}
+                                <span>(${a.avgRating}/5 dari ${a.ratingCount} rating)</span>
                             </div>
                         </div>
-                    ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}
-                    ${isAdminLoggedIn ? `
-                        <div style="margin-top:12px; display:flex; gap:8px;">
-                            <button onclick="openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
-                            <button onclick="adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn">Hapus</button>
-                        </div>
-                    ` : ''}
+                    </div>
                 </div>
+                ${filmsListHtml}
+                ${isLoggedIn ? `
+                    <div class="actor-rating-section" style="margin-top:12px; padding-top:12px; border-top:1px solid #eef2f6;">
+                        <label style="font-size:13px; color:#666; margin-bottom:8px; display:block;"><i class="fas fa-star" style="color:#f59e0b;"></i> Beri Rating untuk ${escapeHtml(a.name)}:</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            ${[1,2,3,4,5].map(s => `
+                                <i class="fas fa-star rating-star" 
+                                   data-actor="${escapeHtml(a.name)}" 
+                                   data-rating="${s}" 
+                                   style="font-size:32px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
+                                </i>
+                            `).join('')}
+                            <span style="margin-left:12px; font-size:14px; color:#666;">Rating Anda: ${userRatingValue}/5</span>
+                        </div>
+                        <div style="margin-top:6px; font-size:12px; color:#888;">
+                            ${renderActorStars(userRatingValue)} (${userRatingValue}/5 bintang)
+                        </div>
+                    </div>
+                ` : `<button onclick="showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}
+                ${isAdminLoggedIn ? `
+                    <div style="margin-top:12px; display:flex; gap:8px;">
+                        <button onclick="openEditActorModal('${escapeHtml(a.name)}')" class="login-btn" style="background:#f59e0b;">Edit</button>
+                        <button onclick="adminDeleteActor('${escapeHtml(a.name)}')" class="logout-btn">Hapus</button>
+                    </div>
+                ` : ''}
             </div>
         `;
     });
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
+    
+    // Attach event listener untuk rating actor (sama seperti rating film)
+    document.querySelectorAll('.rating-star').forEach(star => {
+        star.onclick = (e) => {
+            e.stopPropagation();
+            const actorName = star.dataset.actor;
+            const rating = parseInt(star.dataset.rating);
+            rateActor(actorName, rating);
+        };
+    });
 }
 
 function renderWatchlist() {
@@ -1412,6 +1468,10 @@ function closeEditFilmModal() { const m = document.getElementById("editFilmModal
 
 function openAddActorModal() {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
+    
+    // Buat opsi film dari daftar film yang ada
+    const filmOptions = films.map(f => `<option value="${escapeHtml(f.title)}">${escapeHtml(f.title)} (${f.year})</option>`).join('');
+    
     const html = `
         <div id="addActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
@@ -1420,10 +1480,30 @@ function openAddActorModal() {
                     <span class="close-modal" onclick="closeAddActorModal()">&times;</span>
                 </div>
                 <div class="modal-body">
-                    <div class="form-group"><label>Nama Aktor</label><input type="text" id="newActorName" placeholder="Tom Hanks"></div>
-                    <div class="form-group"><label>Bio</label><textarea id="newActorBio" rows="3"></textarea></div>
-                    <div class="form-group"><label>Foto URL</label><input type="text" id="newActorPhotoUrl" placeholder="https://... (opsional)"></div>
-                    <div class="modal-actions"><button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button><button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
+                    <div class="form-group">
+                        <label>Nama Aktor</label>
+                        <input type="text" id="newActorName" placeholder="Tom Hanks">
+                    </div>
+                    <div class="form-group">
+                        <label>Bio</label>
+                        <textarea id="newActorBio" rows="3" placeholder="Biografi singkat aktor..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Foto URL</label>
+                        <input type="text" id="newActorPhotoUrl" placeholder="https://... (opsional)">
+                    </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
+                        <select id="newActorFilms" multiple style="height:120px;">
+                            <option value="">-- Pilih film (bisa lebih dari satu dengan Ctrl+Click) --</option>
+                            ${filmOptions}
+                        </select>
+                        <small style="color:#666; font-size:11px;">Tekan Ctrl (atau Cmd di Mac) untuk memilih beberapa film</small>
+                    </div>
+                    <div class="modal-actions">
+                        <button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button>
+                        <button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1436,6 +1516,10 @@ function openEditActorModal(name) {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
     const actor = actors.find(a => a.name === name);
     if (!actor) return;
+    
+    // Buat opsi film dengan selected jika film sudah dipilih actor
+    const filmOptions = films.map(f => `<option value="${escapeHtml(f.title)}" ${actor.filmsList?.includes(f.title) ? 'selected' : ''}>${escapeHtml(f.title)} (${f.year})</option>`).join('');
+    
     const html = `
         <div id="editActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
             <div class="modal-content" style="background:white; max-width:500px; width:90%; border-radius:20px;">
@@ -1448,7 +1532,18 @@ function openEditActorModal(name) {
                     <div class="form-group"><label>Nama</label><input type="text" id="editActorName" value="${escapeHtml(actor.name)}"></div>
                     <div class="form-group"><label>Bio</label><textarea id="editActorBio" rows="3">${escapeHtml(actor.bio)}</textarea></div>
                     <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}"></div>
-                    <div class="modal-actions"><button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button><button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary">Batal</button></div>
+                    <div class="form-group">
+                        <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
+                        <select id="editActorFilms" multiple style="height:120px;">
+                            <option value="">-- Pilih film (bisa lebih dari satu dengan Ctrl+Click) --</option>
+                            ${filmOptions}
+                        </select>
+                        <small style="color:#666; font-size:11px;">Tekan Ctrl (atau Cmd di Mac) untuk memilih beberapa film</small>
+                    </div>
+                    <div class="modal-actions">
+                        <button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button>
+                        <button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
+                    </div>
                 </div>
             </div>
         </div>

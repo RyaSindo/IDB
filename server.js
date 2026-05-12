@@ -86,10 +86,13 @@ const WatchlistSchema = new mongoose.Schema({
 });
 const Watchlist = mongoose.model('Watchlist', WatchlistSchema);
 
+// Update ActorSchema - Tambahkan field films
 const ActorSchema = new mongoose.Schema({
     name: String,
     bio: String,
     photoUrl: String,
+    films: [{ type: String }], // Array film ids atau judul film
+    filmsList: [String], // Untuk menyimpan judul film yang pernah dibintangi
     createdAt: { type: Date, default: Date.now }
 });
 const Actor = mongoose.model('Actor', ActorSchema);
@@ -400,7 +403,7 @@ app.get('/api/actors', async (req, res) => res.json(await Actor.find()));
 
 app.post('/api/actors', async (req, res) => {
     try {
-        const { name, bio, photo } = req.body;
+        const { name, bio, photo, filmsList } = req.body;
         if (await Actor.findOne({ name })) return res.status(400).json({ success: false, message: 'Aktor sudah ada' });
         let photoUrl = photo;
         if (photo && photo.startsWith('data:image/')) {
@@ -409,7 +412,7 @@ app.post('/api/actors', async (req, res) => {
         } else if (!photoUrl) {
             photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=667eea&color=fff`;
         }
-        const actor = new Actor({ name, bio: bio || "Aktor berbakat", photoUrl });
+        const actor = new Actor({ name, bio: bio || "Aktor berbakat", photoUrl, filmsList: filmsList || [] });
         await actor.save();
         io.emit('actor-added', { actor });
         io.emit('show-toast', { message: `Aktor baru "${name}" ditambahkan`, type: 'info' });
@@ -422,7 +425,7 @@ app.post('/api/actors', async (req, res) => {
 app.put('/api/actors/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, bio, photo } = req.body;
+        const { name, bio, photo, filmsList } = req.body;
         const old = await Actor.findById(id);
         if (!old) return res.status(404).json({ success: false });
         let photoUrl = photo;
@@ -430,10 +433,10 @@ app.put('/api/actors/:id', async (req, res) => {
             const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
             photoUrl = result.secure_url;
         } else if (!photoUrl) photoUrl = old.photoUrl;
-        await Actor.findByIdAndUpdate(id, { name, bio, photoUrl });
+        await Actor.findByIdAndUpdate(id, { name, bio, photoUrl, filmsList: filmsList || [] });
         await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
         await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
-        io.emit('actor-updated', { actor: { id, name, bio, photoUrl } });
+        io.emit('actor-updated', { actor: { id, name, bio, photoUrl, filmsList } });
         io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
         res.json({ success: true });
     } catch (err) {
