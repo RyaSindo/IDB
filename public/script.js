@@ -161,15 +161,47 @@ function initSocket() {
             renderTopActors(); 
         }
     });
-    socket.on('actor-updated', (data) => { 
-        console.log('Actor updated received:', data);
+    socket.on('actor-updated', (data) => {
+    console.log('Actor updated received:', data);
+    
+    // Update data actor di array lokal
+    const updatedActor = data.actor;
+        if (updatedActor) {
+            const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
+            if (actorIndex !== -1) {
+                actors[actorIndex] = {
+                    ...actors[actorIndex],
+                    name: updatedActor.name,
+                    bio: updatedActor.bio,
+                    photoUrl: updatedActor.photoUrl,
+                    filmsList: updatedActor.filmsList || []
+                };
+            }
+        
+            // Update juga film references jika ada perubahan nama actor
+            if (updatedActor.name) {
+                films.forEach(film => {
+                    if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
+                        const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
+                        if (actorIdx !== -1) {
+                            film.actors[actorIdx] = updatedActor.name;
+                        }
+                    }
+                });
+            }
+        }
+    
         if (currentView === 'topactors') {
-            // Refresh data dari server
-            loadData(true).then(() => {
-                renderTopActors();
-            });
-        } else {
-            refreshCurrentView();
+            renderTopActors();
+        } else if (currentView === 'beranda') {
+            renderBeranda();
+        }
+    
+        // Jika modal actor sedang terbuka, refresh isinya
+        const actorModal = document.getElementById('actorModal');
+        if (actorModal && updatedActor) {
+            closeActorModal();
+            setTimeout(() => openActorModal(updatedActor.name), 100);
         }
     });
     socket.on('actor-deleted', () => { 
@@ -539,15 +571,22 @@ async function addNewActor() {
     const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
     
     if (!name) { showToast("Nama aktor harus diisi!", "error"); return; }
+    
     const res = await apiCall('/api/actors', { 
         method: 'POST', 
         body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
     });
+    
     if (res?.success) { 
         await loadData(true); 
         closeAddActorModal(); 
         showToast(`Aktor "${name}" ditambahkan!`, "success"); 
-        render(); 
+        
+        if (currentView === 'topactors') {
+            renderTopActors();
+        } else {
+            render();
+        }
     } else {
         showToast(res?.message || "Gagal menambah aktor!", "error");
     }
@@ -572,6 +611,50 @@ async function updateActor() {
     if (res?.success) { 
         // Refresh data dari server
         await loadData(true);
+        closeEditActorModal(); 
+        showToast(`Aktor "${name}" diperbarui!`, "success");
+        
+        // Render ulang halaman yang sedang aktif
+        if (currentView === 'topactors') {
+            renderTopActors();
+        } else {
+            render();
+        }
+    } else {
+        showToast(res?.message || "Gagal update aktor!", "error");
+    }
+}async function updateActor() {
+    if (!isAdminLoggedIn) return;
+    const id = document.getElementById("editActorId")?.value;
+    const name = document.getElementById("editActorName")?.value.trim();
+    const bio = document.getElementById("editActorBio")?.value.trim();
+    const photoUrl = document.getElementById("editActorPhotoUrl")?.value.trim();
+    const filmsSelect = document.getElementById("editActorFilms");
+    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
+    
+    console.log('Updating actor:', { id, name, bio, filmsList });
+    
+    const res = await apiCall(`/api/actors/${id}`, { 
+        method: 'PUT', 
+        body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
+    });
+    
+    if (res?.success) { 
+        // Update data actor di array lokal
+        const actorIndex = actors.findIndex(a => a.id === id);
+        if (actorIndex !== -1) {
+            actors[actorIndex] = {
+                ...actors[actorIndex],
+                name: name,
+                bio: bio,
+                photoUrl: photoUrl,
+                filmsList: filmsList
+            };
+        }
+        
+        // Refresh data dari server untuk memastikan sinkron
+        await loadData(true);
+        
         closeEditActorModal(); 
         showToast(`Aktor "${name}" diperbarui!`, "success");
         
@@ -917,20 +1000,35 @@ function addCommentToUI(comment) {
 
 // ==================== MODAL ACTOR =======================
 function openActorModal(actorName) {
+    // Cari actor dengan data terbaru dari array actors
     const actor = actors.find(a => a.name === actorName);
     if (!actor) {
         console.error('Actor tidak ditemukan:', actorName);
+        // Coba refresh data dulu
+        loadData(true).then(() => {
+            const refreshedActor = actors.find(a => a.name === actorName);
+            if (refreshedActor) {
+                openActorModal(actorName);
+            } else {
+                showToast('Data aktor tidak ditemukan', 'error');
+            }
+        });
         return;
     }
     
-    const avgRating = actor.avgRating || "0.0";
-    const ratingCount = actor.ratingCount || 0;
-    const userRatingValue = actor.userRating?.rating || 0;
+    // Hitung rating dari data terbaru
+    const actorWithRating = getTopActors().find(a => a.name === actorName);
+    const avgRating = actorWithRating?.avgRating || "0.0";
+    const ratingCount = actorWithRating?.ratingCount || 0;
+    const userRatingValue = actorWithRating?.userRating?.rating || 0;
     const isLoggedIn = !!(currentUser || isAdminLoggedIn);
-    const userId = isAdminLoggedIn ? "admin" : currentUser;
     
-    // Cari film-film yang dibintangi actor
+    // Cari film-film yang dibintangi actor dari data films terbaru
     const actorFilms = films.filter(f => f.actors && f.actors.includes(actor.name));
+    
+    console.log('Opening actor modal:', actor.name);
+    console.log('Films list from actor object:', actor.filmsList);
+    console.log('Films from film database:', actorFilms.map(f => f.title));
     
     const filmsHtml = actorFilms.length > 0 ? `
         <div style="margin-top:20px;">
@@ -1010,9 +1108,9 @@ function openActorModal(actorName) {
                 rateActor(actorName, rating);
                 // Update tampilan rating di modal setelah rating berhasil
                 setTimeout(() => {
-                    const updatedActor = getTopActors().find(a => a.name === actorName);
-                    if (updatedActor) {
-                        const newRating = updatedActor.userRating?.rating || 0;
+                    const updatedActorWithRating = getTopActors().find(a => a.name === actorName);
+                    if (updatedActorWithRating) {
+                        const newRating = updatedActorWithRating.userRating?.rating || 0;
                         document.querySelectorAll('#actorModal .fa-star[data-actor]').forEach(s => {
                             const r = parseInt(s.dataset.rating);
                             s.style.color = newRating >= r ? '#f59e0b' : '#cbd5e0';
