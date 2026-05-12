@@ -245,6 +245,10 @@ async function loadData(force = false) {
         const data = await apiCall('/api/all-data');
         if (!data) return;
         
+        // Simpan rating user saat ini sebelum load data (untuk fallback)
+        const previousUserRatings = [...actorRatingsByUser];
+        const currentUserId = isAdminLoggedIn ? "admin" : currentUser;
+        
         users = (data.users || []).map(u => ({ ...u, _id: safeString(u._id) }));
         admins = data.admins || [];
         films = (data.films || []).map(film => ({ ...film, id: safeString(film._id), _id: safeString(film._id) }));
@@ -252,8 +256,20 @@ async function loadData(force = false) {
         watchlist = (data.watchlist || []).map(w => ({ ...w, userId: safeString(w.userId), filmId: safeString(w.filmId) }));
         userProfiles = data.userProfiles || {};
         reports = (data.reports || []).map(r => ({ ...r, _id: safeString(r._id) }));
-        actors = (data.actors || []).map(a => ({ ...a, id: safeString(a._id), _id: safeString(a._id) }));
-        actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({ ...ar, userId: safeString(ar.userId) }));
+        actors = (data.actors || []).map(a => ({ ...a, id: safeString(a._id), _id: safeString(a._id), filmsList: a.filmsList || [] }));
+        
+        // Load actor ratings - pastikan userId sudah dalam format string yang konsisten
+        actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({
+            ...ar,
+            userId: safeString(ar.userId),
+            actorName: ar.actorName,
+            rating: ar.rating,
+            timestamp: ar.timestamp
+        }));
+        
+        console.log('Loaded actor ratings from server:', actorRatingsByUser);
+        console.log('Current user ID:', currentUserId);
+        console.log('Current user ratings:', actorRatingsByUser.filter(r => r.userId === currentUserId));
         
         if (currentToken) {
             const session = await apiCall('/api/session', { headers: { 'Authorization': currentToken } });
@@ -319,17 +335,33 @@ function isInWatchlist(uid, fid) {
 
 function getTopActors() {
     const map = {};
+    const currentUserId = isAdminLoggedIn ? "admin" : currentUser;
+    
+    // Hitung rating rata-rata dari semua user
     actorRatingsByUser.forEach(r => {
         if (!map[r.actorName]) map[r.actorName] = { total: 0, count: 0 };
         map[r.actorName].total += r.rating;
         map[r.actorName].count++;
     });
-    return actors.map(a => ({
-        ...a,
-        avgRating: map[a.name] ? (map[a.name].total / map[a.name].count).toFixed(1) : "0.0",
-        ratingCount: map[a.name]?.count || 0,
-        userRating: actorRatingsByUser.find(r => r.actorName === a.name && safeString(r.userId) === safeString(isAdminLoggedIn ? "admin" : currentUser))
-    })).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating));
+    
+    // Debug: log rating user saat ini
+    console.log('Current user:', currentUserId);
+    console.log('All actor ratings:', actorRatingsByUser);
+    console.log('Current user ratings:', actorRatingsByUser.filter(r => r.userId === currentUserId));
+    
+    return actors.map(a => {
+        // Cari rating user saat ini untuk aktor ini
+        const userRatingData = actorRatingsByUser.find(r => r.actorName === a.name && r.userId === currentUserId);
+        
+        console.log(`Actor ${a.name}: userRating = ${userRatingData?.rating || 'none'}`);
+        
+        return {
+            ...a,
+            avgRating: map[a.name] ? (map[a.name].total / map[a.name].count).toFixed(1) : "0.0",
+            ratingCount: map[a.name]?.count || 0,
+            userRating: userRatingData
+        };
+    }).sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating));
 }
 
 function renderActorStars(rating) {
@@ -1287,6 +1319,10 @@ function renderTopActors() {
     const all = getTopActors();
     const filtered = actorSearchQuery ? all.filter(a => a.name.toLowerCase().includes(actorSearchQuery.toLowerCase())) : all;
     const isLoggedIn = !!(currentUser || isAdminLoggedIn);
+    const currentUserId = isAdminLoggedIn ? "admin" : currentUser;
+    
+    console.log('Rendering top actors, currentUserId:', currentUserId);
+    console.log('Filtered actors with userRating:', filtered.map(a => ({ name: a.name, userRating: a.userRating?.rating })));
     
     let html = `
         <h2>⭐ Top Aktor</h2>
@@ -1334,15 +1370,15 @@ function renderTopActors() {
                     ` : ''}
                     ${isLoggedIn ? `
                         <div class="actor-rating-section" style="margin-top:12px; padding-top:12px; border-top:1px solid #eef2f6;">
-                            <div style="display:flex; gap:5px; align-items:center;">
+                            <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;">
                                 ${[1,2,3,4,5].map(s => `
                                     <i class="fas fa-star rating-star" 
                                        data-actor="${escapeHtml(a.name)}" 
                                        data-rating="${s}" 
-                                       style="font-size:24px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
+                                       style="font-size:28px; cursor:pointer; color:${userRatingValue >= s ? '#f59e0b' : '#cbd5e0'}; transition:all 0.1s;">
                                     </i>
                                 `).join('')}
-                                <span style="margin-left:8px; font-size:13px; color:#666;">Rating Anda: ${userRatingValue}/5</span>
+                                <span style="margin-left:12px; font-size:14px; color:#f59e0b; font-weight:500;">Rating Anda: ${userRatingValue}/5 ⭐</span>
                             </div>
                         </div>
                     ` : `<button onclick="event.stopPropagation(); showAuthModal()" class="login-btn" style="margin-top:12px;">Login untuk Rating</button>`}

@@ -461,7 +461,21 @@ app.delete('/api/actors/:id', async (req, res) => {
 });
 
 // ---- Actor Ratings ----
-app.get('/api/actor-ratings', async (req, res) => res.json(await ActorRating.find()));
+app.get('/api/actor-ratings', async (req, res) => {
+    try {
+        const ratings = await ActorRating.find();
+        // Konversi ObjectId ke string untuk konsistensi
+        const formattedRatings = ratings.map(r => ({
+            actorName: r.actorName,
+            userId: r.userId.toString(),
+            rating: r.rating,
+            timestamp: r.timestamp
+        }));
+        res.json(formattedRatings);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/actor-ratings', async (req, res) => {
     try {
