@@ -453,57 +453,45 @@ app.put('/api/actors/:id', async (req, res) => {
         const { name, bio, photo, filmsList } = req.body;
         const old = await Actor.findById(id);
         if (!old) return res.status(404).json({ success: false });
-        
-        let photoUrl = photo;
-        if (photo && photo.startsWith('data:image/')) {
-            const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
-            photoUrl = result.secure_url;
-        } else if (!photoUrl) photoUrl = old.photoUrl;
-        
-        // --- SINKRONISASI FILM ---
-        const oldFilmsList = old.filmsList || [];
-        const newFilmsList = filmsList || [];
-        
-        // Film yang harus ditambahkan actor ke dalam field actors
-        const filmsToAdd = newFilmsList.filter(f => !oldFilmsList.includes(f));
-        // Film yang harus dihapus actor dari field actors
-        const filmsToRemove = oldFilmsList.filter(f => !newFilmsList.includes(f));
-        
-        // Tambahkan actor ke film
+
+        // Sinkronisasi film
+        const oldFilms = old.filmsList || [];
+        const newFilms = filmsList || [];
+        const filmsToAdd = newFilms.filter(f => !oldFilms.includes(f));
+        const filmsToRemove = oldFilms.filter(f => !newFilms.includes(f));
+
         for (const filmTitle of filmsToAdd) {
             await Film.updateOne(
                 { title: filmTitle },
                 { $addToSet: { actors: name } }
             );
         }
-        
-        // Hapus actor dari film
         for (const filmTitle of filmsToRemove) {
             await Film.updateOne(
                 { title: filmTitle },
                 { $pull: { actors: name } }
             );
         }
-        
-        // Jika nama actor berubah, update juga di film
-        if (old.name !== name) {
-            await Film.updateMany(
-                { actors: old.name },
-                { $set: { "actors.$": name } }
-            );
-            await ActorRating.updateMany(
-                { actorName: old.name },
-                { $set: { actorName: name } }
-            );
-        }
-        
-        // Update actor
+
+        // Update actor (termasuk jika nama berubah)
+        let photoUrl = photo;
+        if (photo && photo.startsWith('data:image/')) {
+            const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
+            photoUrl = result.secure_url;
+        } else if (!photoUrl) photoUrl = old.photoUrl;
+
         const updatedActor = await Actor.findByIdAndUpdate(
             id,
-            { name, bio, photoUrl, filmsList: newFilmsList },
+            { name, bio, photoUrl, filmsList: newFilms },
             { new: true }
         );
-        
+
+        // Jika nama berubah, update juga di film dan actorRating
+        if (old.name !== name) {
+            await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
+            await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
+        }
+
         io.emit('actor-updated', { actor: updatedActor });
         io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
         res.json({ success: true, actor: updatedActor });
