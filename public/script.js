@@ -161,10 +161,15 @@ function initSocket() {
             renderTopActors(); 
         }
     });
-    socket.on('actor-updated', () => { 
+    socket.on('actor-updated', (data) => { 
+        console.log('Actor updated received:', data);
         if (currentView === 'topactors') {
-            loadData(false);
-            renderTopActors(); 
+            // Refresh data dari server
+            loadData(true).then(() => {
+                renderTopActors();
+            });
+        } else {
+            refreshCurrentView();
         }
     });
     socket.on('actor-deleted', () => { 
@@ -557,17 +562,27 @@ async function updateActor() {
     const filmsSelect = document.getElementById("editActorFilms");
     const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
     
+    console.log('Updating actor:', { id, name, bio, filmsList });
+    
     const res = await apiCall(`/api/actors/${id}`, { 
         method: 'PUT', 
         body: JSON.stringify({ name, bio, photo: photoUrl, filmsList }) 
     });
+    
     if (res?.success) { 
-        await loadData(true); 
+        // Refresh data dari server
+        await loadData(true);
         closeEditActorModal(); 
-        showToast(`Aktor "${name}" diperbarui!`, "success"); 
-        render(); 
+        showToast(`Aktor "${name}" diperbarui!`, "success");
+        
+        // Render ulang halaman yang sedang aktif
+        if (currentView === 'topactors') {
+            renderTopActors();
+        } else {
+            render();
+        }
     } else {
-        showToast("Gagal update aktor!", "error");
+        showToast(res?.message || "Gagal update aktor!", "error");
     }
 }
 
@@ -1687,10 +1702,19 @@ function closeAddActorModal() { const m = document.getElementById("addActorModal
 function openEditActorModal(name) {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
     const actor = actors.find(a => a.name === name);
-    if (!actor) return;
+    if (!actor) {
+        console.error('Actor not found:', name);
+        return;
+    }
+    
+    console.log('Editing actor:', actor);
+    console.log('Current filmsList:', actor.filmsList);
     
     // Buat opsi film dengan selected jika film sudah dipilih actor
-    const filmOptions = films.map(f => `<option value="${escapeHtml(f.title)}" ${actor.filmsList?.includes(f.title) ? 'selected' : ''}>${escapeHtml(f.title)} (${f.year})</option>`).join('');
+    const filmOptions = films.map(f => {
+        const isSelected = actor.filmsList && actor.filmsList.includes(f.title);
+        return `<option value="${escapeHtml(f.title)}" ${isSelected ? 'selected' : ''}>${escapeHtml(f.title)} (${f.year})</option>`;
+    }).join('');
     
     const html = `
         <div id="editActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
@@ -1706,8 +1730,7 @@ function openEditActorModal(name) {
                     <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}"></div>
                     <div class="form-group">
                         <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
-                        <select id="editActorFilms" multiple style="height:120px;">
-                            <option value="">-- Pilih film (bisa lebih dari satu dengan Ctrl+Click) --</option>
+                        <select id="editActorFilms" multiple style="height:150px;">
                             ${filmOptions}
                         </select>
                         <small style="color:#666; font-size:11px;">Tekan Ctrl (atau Cmd di Mac) untuk memilih beberapa film</small>

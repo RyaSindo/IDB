@@ -399,7 +399,19 @@ app.put('/api/profiles/:userId', async (req, res) => {
 });
 
 // ---- Actors ----
-app.get('/api/actors', async (req, res) => res.json(await Actor.find()));
+app.get('/api/actors', async (req, res) => {
+    try {
+        const actors = await Actor.find();
+        // Pastikan filmsList selalu ada (array)
+        const formattedActors = actors.map(a => ({
+            ...a.toObject(),
+            filmsList: a.filmsList || []
+        }));
+        res.json(formattedActors);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.post('/api/actors', async (req, res) => {
     try {
@@ -428,18 +440,30 @@ app.put('/api/actors/:id', async (req, res) => {
         const { name, bio, photo, filmsList } = req.body;
         const old = await Actor.findById(id);
         if (!old) return res.status(404).json({ success: false });
+        
         let photoUrl = photo;
         if (photo && photo.startsWith('data:image/')) {
             const result = await cloudinary.uploader.upload(photo, { folder: 'idb/actors' });
             photoUrl = result.secure_url;
         } else if (!photoUrl) photoUrl = old.photoUrl;
-        await Actor.findByIdAndUpdate(id, { name, bio, photoUrl, filmsList: filmsList || [] });
-        await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
-        await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
-        io.emit('actor-updated', { actor: { id, name, bio, photoUrl, filmsList } });
+        
+        const updatedActor = await Actor.findByIdAndUpdate(
+            id, 
+            { name, bio, photoUrl, filmsList: filmsList || [] }, 
+            { new: true }  // Return the updated document
+        );
+        
+        // Update film references jika nama aktor berubah
+        if (old.name !== name) {
+            await Film.updateMany({ actors: old.name }, { $set: { "actors.$": name } });
+            await ActorRating.updateMany({ actorName: old.name }, { $set: { actorName: name } });
+        }
+        
+        io.emit('actor-updated', { actor: updatedActor });
         io.emit('show-toast', { message: `Aktor "${name}" diperbarui`, type: 'info' });
-        res.json({ success: true });
+        res.json({ success: true, actor: updatedActor });
     } catch (err) {
+        console.error('Error updating actor:', err);
         res.status(500).json({ success: false, message: err.message });
     }
 });
