@@ -1412,8 +1412,22 @@ function renderWatchlist() {
         document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><p>Login dulu untuk melihat watchlist!</p><button class="login-btn" onclick="showAuthModal()">Login</button></div>`;
         return;
     }
-    const uid = isAdminLoggedIn ? "admin" : currentUser;
-    const wl = watchlist.filter(w => safeString(w.userId) === safeString(uid));
+    
+    // Dapatkan userId dalam bentuk ObjectId (atau 'admin')
+    let userIdForFilter = null;
+    if (isAdminLoggedIn) {
+        userIdForFilter = 'admin';
+    } else {
+        const userObj = users.find(u => u.username === currentUser);
+        if (userObj) {
+            userIdForFilter = userObj._id; // ObjectId
+        } else {
+            userIdForFilter = currentUser; // fallback (seharusnya tidak terjadi)
+        }
+    }
+    
+    const wl = watchlist.filter(w => safeString(w.userId) === safeString(userIdForFilter));
+    
     if (wl.length === 0) {
         document.getElementById("mainContent").innerHTML = `<div style="text-align:center;padding:50px;"><h2>Watchlist Kosong</h2><p>Tambahkan film ke watchlist dari halaman film.</p></div>`;
         return;
@@ -1429,7 +1443,7 @@ function renderWatchlist() {
                     <div class="poster-info">
                         <div class="poster-title">${escapeHtml(film.title)}</div>
                         <div class="poster-year">${film.year}</div>
-                        <button class="logout-btn" onclick="event.stopPropagation(); toggleWatchlist('${uid}', '${film.id}')">Hapus</button>
+                        <button class="logout-btn" onclick="event.stopPropagation(); toggleWatchlist('${currentUser || 'admin'}', '${film.id}')">Hapus</button>
                     </div>
                 </div>
             `;
@@ -1500,25 +1514,6 @@ function viewProfile(identifier) {
             ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()">Edit Profil</button>` : ''}
         </div>
         <hr>
-        <h3>🏆 Top 3 Film</h3>
-        <div class="film-grid">
-            ${top3FilmsToShow.map(id => {
-                const f = films.find(f => safeString(f.id) === safeString(id));
-                return f ? `<div class="film-poster-card" onclick="openFilmModal('${safeId(f.id)}')">
-                    <img class="poster-img" src="${f.posterUrl}">
-                    <div class="poster-info"><div class="poster-title">${escapeHtml(f.title)}</div></div>
-                </div>` : '';
-            }).join('') || '<p>Belum ada film yang dirating</p>'}
-        </div>
-        <h3>⭐ Rating & Komentar</h3>
-        ${userRatings.map(r => {
-            const f = films.find(f => safeString(f.id) === safeString(r.filmId));
-            return f ? `<div class="review-item">
-                <strong>${escapeHtml(f.title)}</strong><br>
-                ⭐ ${r.rating}/10<br>
-                "${escapeHtml(r.comment)}"
-            </div>` : '';
-        }).join('') || '<p>Belum memberi rating</p>'}
     `;
     document.getElementById("mainContent").innerHTML = html;
 }
