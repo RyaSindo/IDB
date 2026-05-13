@@ -1514,6 +1514,25 @@ function viewProfile(identifier) {
             ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()">Edit Profil</button>` : ''}
         </div>
         <hr>
+        <h3>🏆 Top 3 Film</h3>
+        <div class="film-grid">
+            ${top3FilmsToShow.map(id => {
+                const f = films.find(f => safeString(f.id) === safeString(id));
+                return f ? `<div class="film-poster-card" onclick="openFilmModal('${safeId(f.id)}')">
+                    <img class="poster-img" src="${f.posterUrl}">
+                    <div class="poster-info"><div class="poster-title">${escapeHtml(f.title)}</div></div>
+                </div>` : '';
+            }).join('') || '<p>Belum ada film yang dirating</p>'}
+        </div>
+        <h3>⭐ Rating & Komentar</h3>
+        ${userRatings.map(r => {
+            const f = films.find(f => safeString(f.id) === safeString(r.filmId));
+            return f ? `<div class="review-item">
+                <strong>${escapeHtml(f.title)}</strong><br>
+                ⭐ ${r.rating}/10<br>
+                "${escapeHtml(r.comment)}"
+            </div>` : '';
+        }).join('') || '<p>Belum memberi rating</p>'}
     `;
     document.getElementById("mainContent").innerHTML = html;
 }
