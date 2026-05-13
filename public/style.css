@@ -18,7 +18,7 @@ body {
     min-height: 100vh;
 }
 
-/* ================= HEADER RESPONSIF ================= */
+/* ================= HEADER ================= */
 header {
     background: white;
     border-radius: 16px;
@@ -61,42 +61,40 @@ header {
     flex-shrink: 0;
 }
 
-/* ================= RESPONSIVE MOBILE ================= */
+/* ================= RESPONSIVE MOBILE (Header & Footer tetap seperti desktop) ================= */
 @media (max-width: 768px) {
     .container {
         padding: 12px;
     }
 
+    /* Header tetap horizontal, hanya mengecilkan ukuran */
     header {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-        padding: 12px;
+        padding: 10px 12px;
+        gap: 8px;
     }
 
     .logo {
-        text-align: center;
-        margin-bottom: 4px;
+        font-size: 20px;
     }
 
     .nav-links {
+        flex: 0 1 auto;
         justify-content: center;
         gap: 6px;
-        flex-wrap: wrap;
     }
 
     .nav-btn {
-        padding: 8px 14px;
-        font-size: 13px;
+        padding: 6px 12px;
+        font-size: 12px;
     }
 
     .user-info {
-        justify-content: center;
-        margin-top: 4px;
-        width: fit-content;
-        align-self: center;
+        font-size: 13px;
+        padding: 4px 12px;
+        gap: 8px;
     }
 
+    /* Film grid dan lainnya */
     .film-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 12px;
@@ -156,7 +154,6 @@ header {
     .modal-content {
         width: 95%;
         max-width: 95%;
-        margin: 0 auto;
     }
 
     .modal-film-header {
@@ -186,25 +183,16 @@ header {
         width: 100%;
     }
 
-    /* Form row */
     .form-row {
         grid-template-columns: 1fr;
         gap: 12px;
     }
 
-    /* Footer responsif */
+    /* Footer tetap multi-kolom seperti desktop, hanya mengecilkan gap */
     .footer-container {
-        grid-template-columns: 1fr;
-        text-align: center;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
         gap: 20px;
-    }
-
-    .footer-section ul {
-        padding: 0;
-    }
-
-    .footer-section li {
-        margin-bottom: 8px;
+        text-align: left;
     }
 
     .realtime-badge {
@@ -230,8 +218,8 @@ header {
 /* Untuk layar sangat kecil (max-width 480px) */
 @media (max-width: 480px) {
     .nav-btn {
-        padding: 6px 12px;
-        font-size: 12px;
+        padding: 5px 10px;
+        font-size: 11px;
     }
 
     .nav-links {
@@ -239,12 +227,12 @@ header {
     }
 
     .logo {
-        font-size: 20px;
+        font-size: 18px;
     }
 
     .user-info {
-        font-size: 14px;
-        padding: 4px 12px;
+        font-size: 12px;
+        padding: 4px 10px;
     }
 
     .film-grid {
@@ -266,6 +254,13 @@ header {
 
     .modal-body {
         padding: 16px;
+    }
+
+    /* Footer menjadi satu kolom di layar sangat kecil */
+    .footer-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 16px;
     }
 }
 
@@ -953,7 +948,7 @@ h3 {
     margin: 15px 0 10px;
 }
 
-/* Animasi dan lainnya tetap */
+/* Animasi notifikasi dan lainnya tetap */
 .realtime-notification {
     position: fixed;
     top: 20px;
