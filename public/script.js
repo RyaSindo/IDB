@@ -1456,20 +1456,29 @@ function viewProfile(identifier) {
     if (uid === 'admin') {
         userIdForRatings = 'admin';
     } else {
-        const userObj = users.find(u => u.username === uid);
+        // Coba cari user berdasarkan username
+        let userObj = users.find(u => u.username === uid);
+        if (!userObj) {
+            // Jika tidak ditemukan, coba cari berdasarkan _id (misal identifier sudah berupa ObjectId)
+            userObj = users.find(u => u._id === uid);
+        }
         if (userObj) {
             userIdForRatings = userObj._id;
         } else {
-            // fallback: mungkin uid sudah berupa id (misal dari laporan)
+            // Fallback terakhir: gunakan uid apa adanya (misal dari laporan)
             userIdForRatings = uid;
         }
     }
+    
+    // Debug: lihat hasil pencarian
+    console.log('viewProfile - uid:', uid, 'userIdForRatings:', userIdForRatings);
     
     // Filter rating berdasarkan userId (ObjectId)
     let userRatings = [];
     if (userIdForRatings && userIdForRatings !== 'admin') {
         userRatings = ratings.filter(r => safeString(r.userId) === safeString(userIdForRatings));
     }
+    console.log('userRatings found:', userRatings.length);
     
     // Top 3 Film: jika user belum memilih, ambil dari rating tertinggi user
     let top3FilmsToShow = prof.top3Films || [];
