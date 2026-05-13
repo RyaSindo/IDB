@@ -28,7 +28,7 @@ header {
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
 
@@ -44,7 +44,7 @@ header {
 
 .nav-links {
     display: flex;
-    gap: 1px;
+    gap: 8px;
     flex-wrap: wrap;
     flex: 1;
     justify-content: center;
@@ -55,7 +55,7 @@ header {
     padding: 4px 16px 4px 12px;
     border-radius: 40px;
     display: flex;
-    gap: 6px;
+    gap: 10px;
     align-items: center;
     font-size: 16px;
     flex-shrink: 0;
@@ -67,24 +67,28 @@ header {
         padding: 12px;
     }
 
-    /* Header tetap horizontal, hanya perkecil jarak */
     header {
         padding: 10px 16px;
-        gap: 8px;
+        gap: 10px;
     }
 
     .logo {
         font-size: 20px;
     }
 
+    .nav-links {
+        gap: 4px;
+    }
+
     .nav-btn {
-        padding: 6px 12px;
-        font-size: 13px;
+        padding: 6px 10px;
+        font-size: 12px;
     }
 
     .user-info {
-        font-size: 14px;
-        padding: 4px 12px;
+        font-size: 13px;
+        padding: 3px 10px;
+        gap: 6px;
     }
 
     /* Film grid lebih kecil */
@@ -105,7 +109,7 @@ header {
         font-size: 12px;
     }
 
-    /* Actors grid tetap 1 kolom agar rapi, tapi tidak mengubah struktur */
+    /* Actors grid tetap 1 kolom agar rapi */
     .actors-grid {
         grid-template-columns: 1fr;
     }
@@ -156,7 +160,7 @@ header {
     }
 }
 
-/* Layar sangat kecil (≤480px) -> form row jadi 1 kolom */
+/* Layar sangat kecil (≤480px) -> form row jadi 1 kolom, footer 1 kolom */
 @media (max-width: 480px) {
     .form-row {
         grid-template-columns: 1fr;
@@ -171,13 +175,19 @@ header {
     }
 
     .nav-btn {
-        padding: 5px 10px;
-        font-size: 12px;
+        padding: 5px 8px;
+        font-size: 11px;
+        gap: 4px;
     }
 
     .footer-container {
         grid-template-columns: 1fr;
         text-align: center;
+    }
+
+    .user-info {
+        font-size: 12px;
+        gap: 4px;
     }
 }
 
