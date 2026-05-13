@@ -1698,16 +1698,14 @@ function openEditActorModal(name) {
         return;
     }
     
-    console.log('Editing actor:', actor);
-    console.log('Current filmsList:', actor.filmsList);
-    
-    // Buat daftar checkbox dengan status checked jika film termasuk dalam filmsList aktor
     const filmCheckboxes = films.map(f => {
         const isChecked = actor.filmsList && actor.filmsList.includes(f.title);
         return `
-            <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;">
-                <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" ${isChecked ? 'checked' : ''}>
-                <span>${escapeHtml(f.title)} (${f.year})</span>
+            <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;" 
+                   onmouseover="this.style.backgroundColor='#f1f5f9'" 
+                   onmouseout="this.style.backgroundColor='transparent'">
+                <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" ${isChecked ? 'checked' : ''} style="margin: 0; flex-shrink: 0; width: 18px; height: 18px;">
+                <span style="flex: 1; text-align: left; font-size: 14px;">${escapeHtml(f.title)} (${f.year})</span>
             </label>
         `;
     }).join('');
