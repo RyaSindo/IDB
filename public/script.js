@@ -1647,39 +1647,45 @@ function initMobileMenu() {
     const menuToggle = document.getElementById('mobileMenuToggle');
     const navLinks = document.getElementById('navLinks');
     const overlay = document.getElementById('sidebarOverlay');
-    const closeBtn = document.getElementById('sidebarCloseBtn');
-    
-    if (!menuToggle) return;
+    const sidebarClose = document.getElementById('sidebarClose'); // tombol X
 
     function closeSidebar() {
-        navLinks.classList.remove('open');
+        if (navLinks) navLinks.classList.remove('open');
         if (overlay) overlay.classList.remove('active');
     }
 
-    function openSidebar() {
-        navLinks.classList.add('open');
-        if (overlay) overlay.classList.add('active');
+    if (menuToggle) {
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (navLinks.classList.contains('open')) {
+                closeSidebar();
+            } else {
+                navLinks.classList.add('open');
+                if (overlay) overlay.classList.add('active');
+            }
+        });
     }
 
-    menuToggle.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (navLinks.classList.contains('open')) {
+    if (sidebarClose) {
+        sidebarClose.addEventListener('click', (e) => {
+            e.stopPropagation();
             closeSidebar();
-        } else {
-            openSidebar();
-        }
-    });
+        });
+    }
 
-    if (overlay) overlay.addEventListener('click', closeSidebar);
-    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+    if (overlay) {
+        overlay.addEventListener('click', closeSidebar);
+    }
 
-    // Tutup sidebar saat nav item diklik
+    // Tutup sidebar saat klik nav-btn (pilihan menu) di mobile
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             if (window.innerWidth <= 768) closeSidebar();
         });
     });
 }
+
+// Pastikan fungsi dipanggil setelah DOM siap (sudah ada di akhir script)
 
 // Panggil di awal (misal setelah initSocket atau DOMContentLoaded)
 document.addEventListener('DOMContentLoaded', () => {
