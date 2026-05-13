@@ -1642,10 +1642,9 @@ function closeEditFilmModal() { const m = document.getElementById("editFilmModal
 function openAddActorModal() {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
     
+    // Buat daftar checkbox dari semua film
     const filmCheckboxes = films.map(f => `
-        <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;" 
-               onmouseover="this.style.backgroundColor='#f1f5f9'" 
-               onmouseout="this.style.backgroundColor='transparent'">
+        <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;">
             <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" style="margin: 0; flex-shrink: 0; width: 18px; height: 18px;">
             <span style="flex: 1; text-align: left; font-size: 14px;">${escapeHtml(f.title)} (${f.year})</span>
         </label>
@@ -1656,9 +1655,9 @@ function openAddActorModal() {
             <div class="modal-content" style="background:white; max-width:550px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
                     <h2 style="margin:0; color:white;"><i class="fas fa-user-plus"></i> Tambah Aktor</h2>
-                    <span class="close-modal" onclick="closeAddActorModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
+                    <span class="close-modal" onclick="closeAddActorModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <div class="form-group">
                         <label>Nama Aktor</label>
                         <input type="text" id="newActorName" placeholder="Tom Hanks">
@@ -1673,14 +1672,14 @@ function openAddActorModal() {
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
-                        <div id="actorFilmsChecklist" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 4px; background: #f8fafc;">
+                        <div id="actorFilmsChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">
                             ${filmCheckboxes}
                         </div>
-                        <small style="color:#666; font-size:11px; margin-top:5px; display:block;">Centang semua film yang dibintangi aktor ini.</small>
+                        <small style="color:#666; font-size:11px;">Centang semua film yang dibintangi aktor ini.</small>
                     </div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="addNewActor()" class="modal-btn modal-btn-primary" style="flex:1;">Tambah</button>
-                        <button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary" style="flex:1;">Batal</button>
+                    <div class="modal-actions">
+                        <button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button>
+                        <button onclick="closeAddActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
                     </div>
                 </div>
             </div>
@@ -1699,14 +1698,16 @@ function openEditActorModal(name) {
         return;
     }
     
+    console.log('Editing actor:', actor);
+    console.log('Current filmsList:', actor.filmsList);
+    
+    // Buat daftar checkbox dengan status checked jika film termasuk dalam filmsList aktor
     const filmCheckboxes = films.map(f => {
         const isChecked = actor.filmsList && actor.filmsList.includes(f.title);
         return `
-            <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;" 
-                   onmouseover="this.style.backgroundColor='#f1f5f9'" 
-                   onmouseout="this.style.backgroundColor='transparent'">
-                <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" ${isChecked ? 'checked' : ''} style="margin: 0; flex-shrink: 0; width: 18px; height: 18px;">
-                <span style="flex: 1; text-align: left; font-size: 14px;">${escapeHtml(f.title)} (${f.year})</span>
+            <label style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; cursor: pointer; border-radius: 6px; transition: background 0.2s;">
+                <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" ${isChecked ? 'checked' : ''}>
+                <span>${escapeHtml(f.title)} (${f.year})</span>
             </label>
         `;
     }).join('');
@@ -1716,32 +1717,23 @@ function openEditActorModal(name) {
             <div class="modal-content" style="background:white; max-width:550px; width:90%; border-radius:20px;">
                 <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2); padding:16px 20px; border-radius:20px 20px 0 0;">
                     <h2 style="margin:0; color:white;"><i class="fas fa-edit"></i> Edit Aktor</h2>
-                    <span class="close-modal" onclick="closeEditActorModal()" style="position:absolute; top:12px; right:20px; font-size:28px; cursor:pointer; color:white;">&times;</span>
+                    <span class="close-modal" onclick="closeEditActorModal()">&times;</span>
                 </div>
-                <div class="modal-body" style="padding:20px;">
+                <div class="modal-body">
                     <input type="hidden" id="editActorId" value="${actor.id}">
-                    <div class="form-group">
-                        <label>Nama</label>
-                        <input type="text" id="editActorName" value="${escapeHtml(actor.name)}">
-                    </div>
-                    <div class="form-group">
-                        <label>Bio</label>
-                        <textarea id="editActorBio" rows="3">${escapeHtml(actor.bio)}</textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Foto URL</label>
-                        <input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}">
-                    </div>
+                    <div class="form-group"><label>Nama</label><input type="text" id="editActorName" value="${escapeHtml(actor.name)}"></div>
+                    <div class="form-group"><label>Bio</label><textarea id="editActorBio" rows="3">${escapeHtml(actor.bio)}</textarea></div>
+                    <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}"></div>
                     <div class="form-group">
                         <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
                         <div id="editActorFilmsChecklist" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 4px; background: #f8fafc;">
                             ${filmCheckboxes}
                         </div>
-                        <small style="color:#666; font-size:11px; margin-top:5px; display:block;">Centang semua film yang dibintangi aktor ini.</small>
+                        <small style="color:#666; font-size:11px;">Centang semua film yang dibintangi aktor ini.</small>
                     </div>
-                    <div class="modal-actions" style="display:flex; gap:10px; margin-top:20px;">
-                        <button onclick="updateActor()" class="modal-btn modal-btn-primary" style="flex:1;">Simpan</button>
-                        <button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary" style="flex:1;">Batal</button>
+                    <div class="modal-actions">
+                        <button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button>
+                        <button onclick="closeEditActorModal()" class="modal-btn modal-btn-secondary">Batal</button>
                     </div>
                 </div>
             </div>
