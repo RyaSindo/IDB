@@ -163,31 +163,35 @@ function initSocket() {
     });
     socket.on('actor-updated', (data) => {
     console.log('Actor updated received:', data);
+    await loadData(true);
     
     // Update data actor di array lokal
-        const updatedActor = data.actor;
+    const updatedActor = data.actor;
     if (updatedActor) {
         const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
-        if (actorIndex !== -1) {
-            actors[actorIndex] = {
-                ...actors[actorIndex],
-                name: updatedActor.name,
-                bio: updatedActor.bio,
-                photoUrl: updatedActor.photoUrl,
-                filmsList: updatedActor.filmsList || []
-            };
-        }
+        if (updatedActor) {
+            const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
+            if (actorIndex !== -1) {
+                actors[actorIndex] = {
+                    ...actors[actorIndex],
+                    name: updatedActor.name,
+                    bio: updatedActor.bio,
+                    photoUrl: updatedActor.photoUrl,
+                    filmsList: updatedActor.filmsList || []
+                };
+            }
         
             // Update juga film references jika ada perubahan nama actor
-                    if (updatedActor.name) {
-            films.forEach(film => {
-                if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
-                    const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
-                    if (actorIdx !== -1) {
-                        film.actors[actorIdx] = updatedActor.name;
+            if (updatedActor.name) {
+                films.forEach(film => {
+                    if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
+                        const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
+                        if (actorIdx !== -1) {
+                            film.actors[actorIdx] = updatedActor.name;
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     }
     
