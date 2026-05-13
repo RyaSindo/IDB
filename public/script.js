@@ -161,7 +161,7 @@ function initSocket() {
             renderTopActors(); 
         }
     });
-    socket.on('actor-updated', (data) => {
+    socket.on('actor-updated', async (data) => {
     console.log('Actor updated received:', data);
     await loadData(true);
     
