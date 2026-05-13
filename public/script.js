@@ -1686,12 +1686,6 @@ function initMobileMenu() {
 }
 
 // Pastikan fungsi dipanggil setelah DOM siap (sudah ada di akhir script)
-
-// Panggil di awal (misal setelah initSocket atau DOMContentLoaded)
-document.addEventListener('DOMContentLoaded', () => {
-    initMobileMenu();
-});
-
 // Panggil fungsi ini setelah loadData atau di awal
 document.addEventListener('DOMContentLoaded', () => {
     initMobileMenu();
