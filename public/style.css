@@ -25,9 +25,9 @@ header {
     padding: 12px 20px;
     margin-bottom: 24px;
     display: flex;
-    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
     gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
@@ -61,15 +61,15 @@ header {
     flex-shrink: 0;
 }
 
-/* ================= RESPONSIVE MOBILE (Header & Footer tetap seperti desktop) ================= */
+/* ================= RESPONSIVE (TETAP MIRIP DESKTOP) ================= */
 @media (max-width: 768px) {
     .container {
         padding: 12px;
     }
 
-    /* Header tetap horizontal, hanya mengecilkan ukuran */
+    /* Header tetap horizontal, hanya perkecil jarak */
     header {
-        padding: 10px 12px;
+        padding: 10px 16px;
         gap: 8px;
     }
 
@@ -77,24 +77,17 @@ header {
         font-size: 20px;
     }
 
-    .nav-links {
-        flex: 0 1 auto;
-        justify-content: center;
-        gap: 6px;
-    }
-
     .nav-btn {
         padding: 6px 12px;
-        font-size: 12px;
+        font-size: 13px;
     }
 
     .user-info {
-        font-size: 13px;
+        font-size: 14px;
         padding: 4px 12px;
-        gap: 8px;
     }
 
-    /* Film grid dan lainnya */
+    /* Film grid lebih kecil */
     .film-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
         gap: 12px;
@@ -112,54 +105,35 @@ header {
         font-size: 12px;
     }
 
+    /* Actors grid tetap 1 kolom agar rapi, tapi tidak mengubah struktur */
     .actors-grid {
         grid-template-columns: 1fr;
-        gap: 12px;
     }
 
-    .actor-card {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-        padding: 12px;
-    }
-
-    .actor-avatar-circle {
-        width: 80px;
-        height: 80px;
-    }
-
-    .actor-info-modern {
-        text-align: center;
-    }
-
+    /* Top3 container 1 kolom */
     .top3-container {
         grid-template-columns: 1fr;
         gap: 16px;
     }
 
-    .top-card-poster {
-        height: 200px;
+    /* Footer tetap multi-kolom, teks kiri */
+    .footer-container {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 20px;
+        text-align: left;
     }
 
-    .search-bar {
-        flex-wrap: wrap;
+    /* AdminFab sedikit mengecil, tetap di kanan bawah */
+    .admin-fab {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
     }
 
-    .search-input {
-        width: 100%;
-    }
-
-    /* Modal responsif */
+    /* Modal lebih proporsional */
     .modal-content {
         width: 95%;
         max-width: 95%;
-    }
-
-    .modal-film-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
     }
 
     .modal-poster {
@@ -175,96 +149,39 @@ header {
         font-size: 24px;
     }
 
-    .modal-actions {
-        flex-direction: column;
-    }
-
-    .modal-btn {
-        width: 100%;
-    }
-
+    /* Form row tetap 2 kolom jika muat */
     .form-row {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
-    /* Footer tetap multi-kolom seperti desktop, hanya mengecilkan gap */
-    .footer-container {
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 20px;
-        text-align: left;
-    }
-
-    .realtime-badge {
-        bottom: 10px;
-        left: 10px;
-        font-size: 10px;
-        padding: 5px 12px;
-    }
-
-    .admin-fab {
-        width: 45px;
-        height: 45px;
-        font-size: 18px;
-    }
-
-    .toast {
-        font-size: 12px;
-        padding: 8px 16px;
-        bottom: 15px;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
     }
 }
 
-/* Untuk layar sangat kecil (max-width 480px) */
+/* Layar sangat kecil (≤480px) -> form row jadi 1 kolom */
 @media (max-width: 480px) {
-    .nav-btn {
-        padding: 5px 10px;
-        font-size: 11px;
-    }
-
-    .nav-links {
-        gap: 4px;
-    }
-
-    .logo {
-        font-size: 18px;
-    }
-
-    .user-info {
-        font-size: 12px;
-        padding: 4px 10px;
+    .form-row {
+        grid-template-columns: 1fr;
     }
 
     .film-grid {
         grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 10px;
     }
 
     .poster-img {
         height: 160px;
     }
 
-    .poster-title {
-        font-size: 11px;
+    .nav-btn {
+        padding: 5px 10px;
+        font-size: 12px;
     }
 
-    .modal-header h2 {
-        font-size: 18px;
-    }
-
-    .modal-body {
-        padding: 16px;
-    }
-
-    /* Footer menjadi satu kolom di layar sangat kecil */
     .footer-container {
         grid-template-columns: 1fr;
         text-align: center;
-        gap: 16px;
     }
 }
 
-/* ================= GAYA LAINNYA (TIDAK BERUBAH) ================= */
+/* ================= GAYA LAIN (TIDAK BERUBAH) ================= */
 .nav-btn {
     background: transparent;
     border: none;
@@ -702,6 +619,7 @@ header {
     font-size: 11px;
 }
 
+/* Modal styles */
 .modal {
     display: none;
     position: fixed;
@@ -948,7 +866,7 @@ h3 {
     margin: 15px 0 10px;
 }
 
-/* Animasi notifikasi dan lainnya tetap */
+/* Real-time Notification Styles */
 .realtime-notification {
     position: fixed;
     top: 20px;
