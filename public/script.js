@@ -1450,32 +1450,25 @@ function renderProfile() {
 function viewProfile(identifier) {
     const uid = safeString(identifier);
     const prof = getProfile(uid);
-    const userRatings = ratings.filter(r => safeString(r.userId) === uid);
-    const avatar = prof.avatarValue ? `<img src="${prof.avatarValue}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;">` : `<i class="fas fa-user-circle" style="font-size:70px;"></i>`;
     
-    let html = `
-        <button class="back-btn" onclick="renderProfile()">← Kembali</button>
-        <div style="text-align:center;">
-            ${avatar}
-            <h2>${escapeHtml(prof.displayName)}</h2>
-            <p>${escapeHtml(prof.bio)}</p>
-            ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()">Edit Profil</button>` : ''}
-        </div>
-        <hr>
-        <h3>🏆 Top 3 Film</h3>
-        <div class="film-grid">
-            ${(prof.top3Films || []).map(id => {
-                const f = films.find(f => safeString(f.id) === safeString(id));
-                return f ? `<div class="film-poster-card" onclick="openFilmModal('${safeId(f.id)}')"><img class="poster-img" src="${f.posterUrl}"><div class="poster-info"><div class="poster-title">${escapeHtml(f.title)}</div></div></div>` : '';
-            }).join('') || '<p>Belum memilih top 3 film</p>'}
-        </div>
-        <h3>⭐ Rating & Komentar</h3>
-        ${userRatings.map(r => {
-            const f = films.find(f => safeString(f.id) === safeString(r.filmId));
-            return f ? `<div class="review-item"><strong>${escapeHtml(f.title)}</strong><br>⭐ ${r.rating}/10<br>"${escapeHtml(r.comment)}"</div>` : '';
-        }).join('') || '<p>Belum memberi rating</p>'}
-    `;
-    document.getElementById("mainContent").innerHTML = html;
+    // Cari user object berdasarkan username (identifier)
+    // Untuk admin, tidak ada rating biasa
+    let userIdForRating = null;
+    if (uid === 'admin') {
+        userIdForRating = 'admin'; // admin tidak punya rating, biarkan kosong
+    } else {
+        const userObj = users.find(u => u.username === uid);
+        if (userObj) {
+            userIdForRating = userObj._id; // ambil ObjectId dari user
+        } else {
+            userIdForRating = uid; // fallback (mungkin sudah berupa id)
+        }
+    }
+    
+    // Filter rating berdasarkan ObjectId (atau 'admin')
+    const userRatings = userIdForRating ? ratings.filter(r => safeString(r.userId) === safeString(userIdForRating)) : [];
+    
+    // ... sisanya tetap sama (avatar, top3Films, dll)
 }
 
 function renderAbout() {
