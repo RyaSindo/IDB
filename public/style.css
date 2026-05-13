@@ -45,7 +45,7 @@ header {
 .nav-links {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-direction: column;
     flex: 1;
     justify-content: center;
 }
@@ -91,24 +91,21 @@ header {
         gap: 6px;
     }
 
-    .sidebar-close-btn {
+    .sidebar-close {
     display: none;
 }
 
 @media (max-width: 768px) {
-    .sidebar-close-btn {
+        .sidebar-close {
         display: block;
-        background: transparent;
-        border: none;
+        text-align: right;
+        padding: 16px 20px;
         font-size: 24px;
         cursor: pointer;
         color: #666;
-        text-align: right;
-        padding: 12px 20px;
-        margin-bottom: 10px;
-        width: 100%;
+        border-bottom: 1px solid #eef2f6;
     }
-    .sidebar-close-btn:hover {
+    .sidebar-close:hover {
         color: #ef4444;
     }
 }
