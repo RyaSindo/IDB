@@ -18,15 +18,16 @@ body {
     min-height: 100vh;
 }
 
+/* ================= HEADER RESPONSIF ================= */
 header {
     background: white;
     border-radius: 16px;
     padding: 12px 20px;
     margin-bottom: 24px;
     display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
     gap: 12px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
 }
@@ -38,14 +39,237 @@ header {
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    flex-shrink: 0;
 }
 
 .nav-links {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    flex: 1;
+    justify-content: center;
 }
 
+.user-info {
+    background: #f0f2f5;
+    padding: 4px 16px 4px 12px;
+    border-radius: 40px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+/* ================= RESPONSIVE MOBILE ================= */
+@media (max-width: 768px) {
+    .container {
+        padding: 12px;
+    }
+
+    header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 12px;
+    }
+
+    .logo {
+        text-align: center;
+        margin-bottom: 4px;
+    }
+
+    .nav-links {
+        justify-content: center;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+
+    .nav-btn {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .user-info {
+        justify-content: center;
+        margin-top: 4px;
+        width: fit-content;
+        align-self: center;
+    }
+
+    .film-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 12px;
+    }
+
+    .film-card, .film-poster-card {
+        flex: 0 0 140px;
+    }
+
+    .poster-img {
+        height: 190px;
+    }
+
+    .poster-title {
+        font-size: 12px;
+    }
+
+    .actors-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .actor-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 12px;
+    }
+
+    .actor-avatar-circle {
+        width: 80px;
+        height: 80px;
+    }
+
+    .actor-info-modern {
+        text-align: center;
+    }
+
+    .top3-container {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .top-card-poster {
+        height: 200px;
+    }
+
+    .search-bar {
+        flex-wrap: wrap;
+    }
+
+    .search-input {
+        width: 100%;
+    }
+
+    /* Modal responsif */
+    .modal-content {
+        width: 95%;
+        max-width: 95%;
+        margin: 0 auto;
+    }
+
+    .modal-film-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .modal-poster {
+        width: 120px;
+        height: 180px;
+    }
+
+    .stars {
+        gap: 5px;
+    }
+
+    .star {
+        font-size: 24px;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .modal-btn {
+        width: 100%;
+    }
+
+    /* Form row */
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    /* Footer responsif */
+    .footer-container {
+        grid-template-columns: 1fr;
+        text-align: center;
+        gap: 20px;
+    }
+
+    .footer-section ul {
+        padding: 0;
+    }
+
+    .footer-section li {
+        margin-bottom: 8px;
+    }
+
+    .realtime-badge {
+        bottom: 10px;
+        left: 10px;
+        font-size: 10px;
+        padding: 5px 12px;
+    }
+
+    .admin-fab {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+
+    .toast {
+        font-size: 12px;
+        padding: 8px 16px;
+        bottom: 15px;
+    }
+}
+
+/* Untuk layar sangat kecil (max-width 480px) */
+@media (max-width: 480px) {
+    .nav-btn {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+
+    .nav-links {
+        gap: 4px;
+    }
+
+    .logo {
+        font-size: 20px;
+    }
+
+    .user-info {
+        font-size: 14px;
+        padding: 4px 12px;
+    }
+
+    .film-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 10px;
+    }
+
+    .poster-img {
+        height: 160px;
+    }
+
+    .poster-title {
+        font-size: 11px;
+    }
+
+    .modal-header h2 {
+        font-size: 18px;
+    }
+
+    .modal-body {
+        padding: 16px;
+    }
+}
+
+/* ================= GAYA LAINNYA (TIDAK BERUBAH) ================= */
 .nav-btn {
     background: transparent;
     border: none;
@@ -69,16 +293,6 @@ header {
 .nav-btn:hover:not(.active) {
     background: #e8ecf1;
     color: #333;
-}
-
-.user-info {
-    background: #f0f2f5;
-    padding: 4px 16px 4px 12px;
-    border-radius: 40px;
-    display: flex;
-    gap: 12px;
-    align-items: center;
-    font-size: 16px;
 }
 
 .login-btn,
@@ -739,28 +953,7 @@ h3 {
     margin: 15px 0 10px;
 }
 
-@media (max-width: 768px) {
-    .container {
-        padding: 12px;
-    }
-    .film-card,
-    .film-poster-card {
-        flex: 0 0 140px;
-    }
-    .poster-img {
-        height: 190px;
-    }
-    .actors-grid {
-        grid-template-columns: 1fr;
-    }
-    .modal-film-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-}
-
-/* Real-time Notification Styles */
+/* Animasi dan lainnya tetap */
 .realtime-notification {
     position: fixed;
     top: 20px;
@@ -822,7 +1015,6 @@ h3 {
     to { width: 0%; }
 }
 
-/* Real-time Badge */
 .realtime-badge {
     position: fixed;
     bottom: 20px;
@@ -869,7 +1061,6 @@ h3 {
     background: #ef4444;
 }
 
-/* Animasi untuk kartu film yang berubah */
 .film-card, .film-poster-card, .actor-card {
     transition: all 0.3s ease;
 }
@@ -878,7 +1069,6 @@ h3 {
     transform: scale(0.98);
 }
 
-/* Highlight untuk perubahan */
 @keyframes highlightFlash {
     0% { background: rgba(102, 126, 234, 0.2); }
     100% { background: transparent; }
@@ -886,301 +1076,4 @@ h3 {
 
 .highlight-change {
     animation: highlightFlash 1s ease-out;
-}
-
-/* ==================== RESPONSIVE MOBILE PHONE ==================== */
-
-/* Untuk semua perangkat mobile (max-width: 768px) */
-@media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
-
-    /* Header - tetap seperti desktop (horizontal) tapi dengan padding lebih kecil */
-    header {
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        padding: 10px 12px;
-        gap: 8px;
-    }
-
-    .logo {
-        font-size: 18px;
-        flex-shrink: 0;
-    }
-
-    .nav-links {
-        order: 2;
-        width: 100%;
-        justify-content: center;
-        gap: 4px;
-        margin-top: 6px;
-    }
-
-    .nav-btn {
-        padding: 6px 12px;
-        font-size: 12px;
-        gap: 4px;
-    }
-
-    .user-info {
-        order: 1;
-        padding: 2px 10px;
-        font-size: 13px;
-        gap: 6px;
-    }
-
-    .login-btn, .register-btn, .logout-btn {
-        padding: 4px 12px;
-        font-size: 12px;
-    }
-
-    /* Grid film */
-    .film-grid {
-        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-        gap: 12px;
-    }
-
-    .film-card, .film-poster-card {
-        flex: 0 0 140px;
-    }
-
-    .poster-img {
-        height: 190px;
-    }
-
-    .poster-title {
-        font-size: 12px;
-    }
-
-    .poster-year, .poster-rating {
-        font-size: 10px;
-    }
-
-    /* Slider film populer */
-    .film-slider {
-        gap: 12px;
-    }
-
-    /* Top 3 container */
-    .top3-container {
-        grid-template-columns: 1fr;
-        gap: 16px;
-    }
-
-    .top-card-poster {
-        height: 200px;
-    }
-
-    .top-card-title {
-        font-size: 14px;
-    }
-
-    .top-card-rating {
-        font-size: 18px;
-    }
-
-    /* Actors grid */
-    .actors-grid {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
-    .actor-card {
-        padding: 12px;
-        gap: 12px;
-    }
-
-    .actor-avatar-circle {
-        width: 55px;
-        height: 55px;
-    }
-
-    .actor-name-modern {
-        font-size: 16px;
-    }
-
-    .actor-bio-modern {
-        font-size: 11px;
-    }
-
-    .rating-star {
-        font-size: 22px !important;
-    }
-
-    .actor-rating-section span {
-        font-size: 12px;
-    }
-
-    /* Modal */
-    .modal-content {
-        width: 95%;
-        max-width: 95%;
-        margin: 10px;
-    }
-
-    .modal-header h2 {
-        font-size: 18px;
-    }
-
-    .modal-body {
-        padding: 16px;
-    }
-
-    .modal-film-header {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-    }
-
-    .modal-poster {
-        width: 120px;
-        height: 180px;
-    }
-
-    .modal-title {
-        font-size: 18px;
-    }
-
-    .modal-synopsis {
-        font-size: 12px;
-    }
-
-    .stars .star {
-        font-size: 24px;
-    }
-
-    /* Form */
-    .form-row {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-
-    .modal-actions {
-        flex-direction: column;
-    }
-
-    .modal-btn {
-        width: 100%;
-    }
-
-    /* Footer */
-    .footer-container {
-        grid-template-columns: 1fr;
-        text-align: center;
-        gap: 20px;
-    }
-
-    .footer-section {
-        text-align: center;
-    }
-
-    /* Toast */
-    .toast {
-        font-size: 12px;
-        padding: 8px 16px;
-        bottom: 16px;
-        left: 16px;
-        transform: none;
-        width: auto;
-        max-width: calc(100% - 32px);
-    }
-
-    /* Realtime badge */
-    .realtime-badge {
-        bottom: 12px;
-        left: 12px;
-        padding: 6px 12px;
-        font-size: 10px;
-    }
-
-    /* Admin FAB */
-    .admin-fab {
-        width: 44px;
-        height: 44px;
-        font-size: 18px;
-    }
-
-    /* Search bar */
-    .search-bar {
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-
-    .search-input {
-        width: 100%;
-        order: 1;
-    }
-
-    .search-bar button {
-        flex: 1;
-        order: 2;
-    }
-
-    /* Profile view */
-    .back-btn {
-        font-size: 12px;
-        padding: 6px 12px;
-    }
-
-    .film-poster-card .poster-info {
-        padding: 8px;
-    }
-
-    /* Tombol trailer & watchlist di modal film */
-    .trailer-btn, .watchlist-modal-btn {
-        padding: 6px 12px;
-        font-size: 12px;
-        margin-right: 4px;
-    }
-}
-
-/* Untuk layar sangat kecil (max-width: 480px) */
-@media (max-width: 480px) {
-    .nav-btn {
-        padding: 4px 8px;
-        font-size: 10px;
-    }
-
-    .logo {
-        font-size: 16px;
-    }
-
-    .user-info {
-        font-size: 11px;
-        padding: 2px 8px;
-    }
-
-    .film-grid {
-        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-        gap: 10px;
-    }
-
-    .poster-img {
-        height: 160px;
-    }
-
-    .poster-title {
-        font-size: 11px;
-    }
-
-    .top-card-poster {
-        height: 180px;
-    }
-}
-
-/* Landscape mode untuk mobile (opsional) */
-@media (max-width: 768px) and (orientation: landscape) {
-    .film-grid {
-        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    }
-
-    .actors-grid {
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    }
-
-    .modal-content {
-        max-height: 85vh;
-    }
 }
