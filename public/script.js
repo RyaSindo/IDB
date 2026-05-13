@@ -514,8 +514,10 @@ async function addNewActor() {
     const name = document.getElementById("newActorName")?.value.trim();
     const bio = document.getElementById("newActorBio")?.value.trim();
     const photoUrl = document.getElementById("newActorPhotoUrl")?.value.trim();
-    const filmsSelect = document.getElementById("newActorFilms");
-    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
+    
+    // Ambil semua checkbox yang dicentang
+    const checkboxes = document.querySelectorAll('#actorFilmsChecklist input[type="checkbox"]:checked');
+    const filmsList = Array.from(checkboxes).map(cb => cb.value).filter(v => v);
     
     if (!name) { showToast("Nama aktor harus diisi!", "error"); return; }
     
@@ -528,12 +530,8 @@ async function addNewActor() {
         await loadData(true); 
         closeAddActorModal(); 
         showToast(`Aktor "${name}" ditambahkan!`, "success"); 
-        
-        if (currentView === 'topactors') {
-            renderTopActors();
-        } else {
-            render();
-        }
+        if (currentView === 'topactors') renderTopActors();
+        else render();
     } else {
         showToast(res?.message || "Gagal menambah aktor!", "error");
     }
@@ -545,8 +543,10 @@ async function updateActor() {
     const name = document.getElementById("editActorName")?.value.trim();
     const bio = document.getElementById("editActorBio")?.value.trim();
     const photoUrl = document.getElementById("editActorPhotoUrl")?.value.trim();
-    const filmsSelect = document.getElementById("editActorFilms");
-    const filmsList = filmsSelect ? Array.from(filmsSelect.selectedOptions).map(opt => opt.value).filter(v => v) : [];
+    
+    // Ambil semua checkbox yang dicentang
+    const checkboxes = document.querySelectorAll('#editActorFilmsChecklist input[type="checkbox"]:checked');
+    const filmsList = Array.from(checkboxes).map(cb => cb.value).filter(v => v);
     
     console.log('Updating actor:', { id, name, bio, filmsList });
     
@@ -556,17 +556,11 @@ async function updateActor() {
     });
     
     if (res?.success) { 
-        // Refresh data dari server untuk memastikan sinkron (films, actors)
         await loadData(true);
         closeEditActorModal(); 
         showToast(`Aktor "${name}" diperbarui!`, "success");
-        
-        // Render ulang halaman yang sedang aktif
-        if (currentView === 'topactors') {
-            renderTopActors();
-        } else {
-            render();
-        }
+        if (currentView === 'topactors') renderTopActors();
+        else render();
     } else {
         showToast(res?.message || "Gagal update aktor!", "error");
     }
@@ -1648,7 +1642,13 @@ function closeEditFilmModal() { const m = document.getElementById("editFilmModal
 function openAddActorModal() {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
     
-    const filmOptions = films.map(f => `<option value="${escapeHtml(f.title)}">${escapeHtml(f.title)} (${f.year})</option>`).join('');
+    // Buat daftar checkbox dari semua film
+    const filmCheckboxes = films.map(f => `
+        <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer;">
+            <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox">
+            <span>${escapeHtml(f.title)} (${f.year})</span>
+        </label>
+    `).join('');
     
     const html = `
         <div id="addActorModal" class="modal active" style="display:flex; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); z-index:1000; justify-content:center; align-items:center;">
@@ -1672,11 +1672,10 @@ function openAddActorModal() {
                     </div>
                     <div class="form-group">
                         <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
-                        <select id="newActorFilms" multiple style="height:120px;">
-                            <option value="">-- Pilih film (bisa lebih dari satu dengan Ctrl+Click) --</option>
-                            ${filmOptions}
-                        </select>
-                        <small style="color:#666; font-size:11px;">Tekan Ctrl (atau Cmd di Mac) untuk memilih beberapa film</small>
+                        <div id="actorFilmsChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">
+                            ${filmCheckboxes}
+                        </div>
+                        <small style="color:#666; font-size:11px;">Centang semua film yang dibintangi aktor ini.</small>
                     </div>
                     <div class="modal-actions">
                         <button onclick="addNewActor()" class="modal-btn modal-btn-primary">Tambah</button>
@@ -1688,6 +1687,7 @@ function openAddActorModal() {
     `;
     document.body.insertAdjacentHTML('beforeend', html);
 }
+
 function closeAddActorModal() { const m = document.getElementById("addActorModal"); if (m) m.remove(); }
 
 function openEditActorModal(name) {
@@ -1701,9 +1701,15 @@ function openEditActorModal(name) {
     console.log('Editing actor:', actor);
     console.log('Current filmsList:', actor.filmsList);
     
-    const filmOptions = films.map(f => {
-        const isSelected = actor.filmsList && actor.filmsList.includes(f.title);
-        return `<option value="${escapeHtml(f.title)}" ${isSelected ? 'selected' : ''}>${escapeHtml(f.title)} (${f.year})</option>`;
+    // Buat daftar checkbox dengan status checked jika film termasuk dalam filmsList aktor
+    const filmCheckboxes = films.map(f => {
+        const isChecked = actor.filmsList && actor.filmsList.includes(f.title);
+        return `
+            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer;">
+                <input type="checkbox" value="${escapeHtml(f.title)}" class="actor-film-checkbox" ${isChecked ? 'checked' : ''}>
+                <span>${escapeHtml(f.title)} (${f.year})</span>
+            </label>
+        `;
     }).join('');
     
     const html = `
@@ -1720,10 +1726,10 @@ function openEditActorModal(name) {
                     <div class="form-group"><label>Foto URL</label><input type="text" id="editActorPhotoUrl" value="${actor.photoUrl}"></div>
                     <div class="form-group">
                         <label><i class="fas fa-film"></i> Film yang pernah dibintangi</label>
-                        <select id="editActorFilms" multiple style="height:150px;">
-                            ${filmOptions}
-                        </select>
-                        <small style="color:#666; font-size:11px;">Tekan Ctrl (atau Cmd di Mac) untuk memilih beberapa film</small>
+                        <div id="editActorFilmsChecklist" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">
+                            ${filmCheckboxes}
+                        </div>
+                        <small style="color:#666; font-size:11px;">Centang semua film yang dibintangi aktor ini.</small>
                     </div>
                     <div class="modal-actions">
                         <button onclick="updateActor()" class="modal-btn modal-btn-primary">Simpan</button>
@@ -1735,6 +1741,7 @@ function openEditActorModal(name) {
     `;
     document.body.insertAdjacentHTML('beforeend', html);
 }
+
 function closeEditActorModal() { const m = document.getElementById("editActorModal"); if (m) m.remove(); }
 
 function openSettingModal() {
