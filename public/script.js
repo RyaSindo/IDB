@@ -1451,24 +1451,67 @@ function viewProfile(identifier) {
     const uid = safeString(identifier);
     const prof = getProfile(uid);
     
-    // Cari user object berdasarkan username (identifier)
-    // Untuk admin, tidak ada rating biasa
-    let userIdForRating = null;
+    // Cari userId (ObjectId) dari username, kecuali admin
+    let userIdForRatings = null;
     if (uid === 'admin') {
-        userIdForRating = 'admin'; // admin tidak punya rating, biarkan kosong
+        userIdForRatings = 'admin';
     } else {
         const userObj = users.find(u => u.username === uid);
         if (userObj) {
-            userIdForRating = userObj._id; // ambil ObjectId dari user
+            userIdForRatings = userObj._id;
         } else {
-            userIdForRating = uid; // fallback (mungkin sudah berupa id)
+            // fallback: mungkin uid sudah berupa id (misal dari laporan)
+            userIdForRatings = uid;
         }
     }
     
-    // Filter rating berdasarkan ObjectId (atau 'admin')
-    const userRatings = userIdForRating ? ratings.filter(r => safeString(r.userId) === safeString(userIdForRating)) : [];
+    // Filter rating berdasarkan userId (ObjectId)
+    let userRatings = [];
+    if (userIdForRatings && userIdForRatings !== 'admin') {
+        userRatings = ratings.filter(r => safeString(r.userId) === safeString(userIdForRatings));
+    }
     
-    // ... sisanya tetap sama (avatar, top3Films, dll)
+    // Top 3 Film: jika user belum memilih, ambil dari rating tertinggi user
+    let top3FilmsToShow = prof.top3Films || [];
+    if (top3FilmsToShow.length === 0 && userRatings.length > 0) {
+        const sortedRatings = [...userRatings].sort((a, b) => b.rating - a.rating);
+        top3FilmsToShow = sortedRatings.slice(0, 3).map(r => r.filmId);
+    }
+    
+    const avatar = prof.avatarValue 
+        ? `<img src="${prof.avatarValue}" style="width:80px;height:80px;border-radius:50%;margin-bottom:10px;">` 
+        : `<i class="fas fa-user-circle" style="font-size:70px;"></i>`;
+    
+    let html = `
+        <button class="back-btn" onclick="renderProfile()">← Kembali</button>
+        <div style="text-align:center;">
+            ${avatar}
+            <h2>${escapeHtml(prof.displayName)}</h2>
+            <p>${escapeHtml(prof.bio)}</p>
+            ${(currentUser === uid || isAdminLoggedIn) ? `<button class="login-btn" onclick="openSettingModal()">Edit Profil</button>` : ''}
+        </div>
+        <hr>
+        <h3>🏆 Top 3 Film</h3>
+        <div class="film-grid">
+            ${top3FilmsToShow.map(id => {
+                const f = films.find(f => safeString(f.id) === safeString(id));
+                return f ? `<div class="film-poster-card" onclick="openFilmModal('${safeId(f.id)}')">
+                    <img class="poster-img" src="${f.posterUrl}">
+                    <div class="poster-info"><div class="poster-title">${escapeHtml(f.title)}</div></div>
+                </div>` : '';
+            }).join('') || '<p>Belum ada film yang dirating</p>'}
+        </div>
+        <h3>⭐ Rating & Komentar</h3>
+        ${userRatings.map(r => {
+            const f = films.find(f => safeString(f.id) === safeString(r.filmId));
+            return f ? `<div class="review-item">
+                <strong>${escapeHtml(f.title)}</strong><br>
+                ⭐ ${r.rating}/10<br>
+                "${escapeHtml(r.comment)}"
+            </div>` : '';
+        }).join('') || '<p>Belum memberi rating</p>'}
+    `;
+    document.getElementById("mainContent").innerHTML = html;
 }
 
 function renderAbout() {
