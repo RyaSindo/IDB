@@ -1642,6 +1642,49 @@ function render() {
     updateStats();
 }
 
+// Sidebar mobile toggle
+function initMobileMenu() {
+    const menuToggle = document.getElementById('mobileMenuToggle');
+    const navLinks = document.getElementById('navLinks');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (!menuToggle) return;
+
+    function closeSidebar() {
+        navLinks.classList.remove('open');
+        if (overlay) overlay.classList.remove('active');
+    }
+
+    function openSidebar() {
+        navLinks.classList.add('open');
+        if (overlay) overlay.classList.add('active');
+    }
+
+    menuToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (navLinks.classList.contains('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    if (overlay) {
+        overlay.addEventListener('click', closeSidebar);
+    }
+
+    // Tutup sidebar saat salah satu nav-btn diklik (opsional)
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (window.innerWidth <= 768) closeSidebar();
+        });
+    });
+}
+
+// Panggil fungsi ini setelah loadData atau di awal
+document.addEventListener('DOMContentLoaded', () => {
+    initMobileMenu();
+});
+
 // ==================== ADMIN MODALS =======================
 function openAddFilmModal() {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }

@@ -15,22 +15,25 @@
 <body>
 <div class="container">
     <header>
-        <div class="logo"><i class="fas fa-film"></i> IDB</div>
-        <div class="nav-links">
-            <button class="nav-btn active" data-view="beranda"><i class="fas fa-home"></i> Beranda</button>
-            <button class="nav-btn" data-view="toprating"><i class="fas fa-trophy"></i> Top Rating</button>
-            <button class="nav-btn" data-view="topactors"><i class="fas fa-star"></i> Top Aktor</button>
-            <button class="nav-btn" data-view="watchlist"><i class="fas fa-bookmark"></i> Watchlist</button>
-            <button class="nav-btn" data-view="profile"><i class="fas fa-user"></i> Profil</button>
-            <button class="nav-btn" data-view="about"><i class="fas fa-info-circle"></i> Tentang</button>
-            <button class="nav-btn" data-view="reports" id="reportsNavBtn" style="display: none;">🚩 Laporan</button>
-        </div>
-        <div class="user-info" id="userInfo">
-            <span id="userDisplay">🔓 Belum login</span>
-            <button id="authBtn" class="login-btn">Login</button>
-            <button id="registerBtn" class="register-btn">Daftar</button>
-        </div>
-    </header>
+    <div class="menu-toggle" id="mobileMenuToggle">
+        <i class="fas fa-bars"></i>
+    </div>
+    <div class="logo"><i class="fas fa-film"></i> IDB</div>
+    <div class="nav-links" id="navLinks">
+        <button class="nav-btn active" data-view="beranda"><i class="fas fa-home"></i> Beranda</button>
+        <button class="nav-btn" data-view="toprating"><i class="fas fa-trophy"></i> Top Rating</button>
+        <button class="nav-btn" data-view="topactors"><i class="fas fa-star"></i> Top Aktor</button>
+        <button class="nav-btn" data-view="watchlist"><i class="fas fa-bookmark"></i> Watchlist</button>
+        <button class="nav-btn" data-view="profile"><i class="fas fa-user"></i> Profil</button>
+        <button class="nav-btn" data-view="about"><i class="fas fa-info-circle"></i> Tentang</button>
+        <button class="nav-btn" data-view="reports" id="reportsNavBtn" style="display: none;">🚩 Laporan</button>
+    </div>
+    <div class="user-info" id="userInfo">
+        <span id="userDisplay">🔓 Belum login</span>
+        <button id="authBtn" class="login-btn">Login</button>
+        <button id="registerBtn" class="register-btn">Daftar</button>
+    </div>
+</header>
 
     <div id="mainContent"></div>
 </div>
