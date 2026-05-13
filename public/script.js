@@ -1647,6 +1647,8 @@ function initMobileMenu() {
     const menuToggle = document.getElementById('mobileMenuToggle');
     const navLinks = document.getElementById('navLinks');
     const overlay = document.getElementById('sidebarOverlay');
+    const closeBtn = document.getElementById('sidebarCloseBtn');
+    
     if (!menuToggle) return;
 
     function closeSidebar() {
@@ -1668,17 +1670,21 @@ function initMobileMenu() {
         }
     });
 
-    if (overlay) {
-        overlay.addEventListener('click', closeSidebar);
-    }
+    if (overlay) overlay.addEventListener('click', closeSidebar);
+    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
 
-    // Tutup sidebar saat salah satu nav-btn diklik (opsional)
+    // Tutup sidebar saat nav item diklik
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             if (window.innerWidth <= 768) closeSidebar();
         });
     });
 }
+
+// Panggil di awal (misal setelah initSocket atau DOMContentLoaded)
+document.addEventListener('DOMContentLoaded', () => {
+    initMobileMenu();
+});
 
 // Panggil fungsi ini setelah loadData atau di awal
 document.addEventListener('DOMContentLoaded', () => {
