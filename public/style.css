@@ -44,7 +44,7 @@ header {
 
 .nav-links {
     display: flex;
-    gap: 8px;
+    gap: 1px;
     flex-wrap: wrap;
     flex: 1;
     justify-content: center;
