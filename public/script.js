@@ -150,8 +150,7 @@ function initSocket() {
     });
     socket.on('film-rating-updated', () => {
         if (currentView === 'beranda' || currentView === 'toprating') {
-            // Hanya update data lokal, bukan refresh penuh
-            loadData(false); // force = false, hanya update jika perlu
+            loadData(false);
             render();
         }
     });
@@ -161,83 +160,35 @@ function initSocket() {
             renderTopActors(); 
         }
     });
+    
+    // PERBAIKAN UTAMA: event actor-updated
     socket.on('actor-updated', async (data) => {
-    console.log('Actor updated received:', data);
-    await loadData(true);
-    
-    // Update data actor di array lokal
-    const updatedActor = data.actor;
-    if (updatedActor) {
-        const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
-        if (updatedActor) {
-            const actorIndex = actors.findIndex(a => a.id === updatedActor.id);
-            if (actorIndex !== -1) {
-                actors[actorIndex] = {
-                    ...actors[actorIndex],
-                    name: updatedActor.name,
-                    bio: updatedActor.bio,
-                    photoUrl: updatedActor.photoUrl,
-                    filmsList: updatedActor.filmsList || []
-                };
-            }
+        console.log('Actor updated received:', data);
+        // Muat ulang semua data dari server (films, actors, dll)
+        await loadData(true);
         
-            // Update juga film references jika ada perubahan nama actor
-            if (updatedActor.name) {
-                films.forEach(film => {
-                    if (film.actors && film.actors.includes(updatedActor.oldName || updatedActor.name)) {
-                        const actorIdx = film.actors.findIndex(a => a === (updatedActor.oldName || updatedActor.name));
-                        if (actorIdx !== -1) {
-                            film.actors[actorIdx] = updatedActor.name;
-                        }
-                    }
-                });
-            }
+        const updatedActor = data.actor;
+        // Render ulang halaman yang sedang aktif
+        if (currentView === 'topactors') {
+            renderTopActors();
+        } else if (currentView === 'beranda') {
+            renderBeranda();
         }
-    }
-    
-    if (currentView === 'topactors') {
-        renderTopActors();
-    } else if (currentView === 'beranda') {
-        renderBeranda();
-    }
-    
-    // Jika modal actor sedang terbuka, refresh isinya
-    const actorModal = document.getElementById('actorModal');
-    if (actorModal && updatedActor) {
-        closeActorModal();
-        setTimeout(() => openActorModal(updatedActor.name), 100);
-    }
+        
+        // Jika modal aktor sedang terbuka, refresh isinya dengan data terbaru
+        const actorModal = document.getElementById('actorModal');
+        if (actorModal && updatedActor) {
+            closeActorModal();
+            setTimeout(() => openActorModal(updatedActor.name), 100);
+        }
     });
+    
     socket.on('actor-deleted', () => { 
-    if (currentView === 'topactors') {
-        loadData(false);
-        renderTopActors(); 
-    }
-});
-//     socket.on('actor-rating-updated', (data) => {
-//     console.log('⭐ Actor rating updated', data);
-//     // Hanya update data lokal, jangan refresh seluruh view
-//     // Karena refresh akan menyebabkan render ulang dan bintang berubah kembali
-    
-//     // Update actorRatingsByUser lokal
-//     const existingIndex = actorRatingsByUser.findIndex(r => r.actorName === data.actorName && r.userId === data.userId);
-//     if (existingIndex !== -1) {
-//         actorRatingsByUser[existingIndex].rating = data.rating;
-//         actorRatingsByUser[existingIndex].timestamp = new Date();
-//     } else {
-//         actorRatingsByUser.push({
-//             actorName: data.actorName,
-//             userId: data.userId,
-//             rating: data.rating,
-//             timestamp: new Date()
-//         });
-//     }
-    
-//     // Hanya rerender halaman top actors jika sedang aktif, TANPA loadData
-//     if (currentView === 'topactors') {
-//         renderTopActors();
-//     }
-// });
+        if (currentView === 'topactors') {
+            loadData(false);
+            renderTopActors(); 
+        }
+    });
     socket.on('new-comment', (data) => {
         if (safeString(currentFilmId) === safeString(data.filmId) && document.getElementById('filmModal')) {
             addCommentToUI(data);
@@ -286,8 +237,6 @@ async function loadData(force = false) {
         const data = await apiCall('/api/all-data');
         if (!data) return;
         
-        // Simpan rating user saat ini sebelum load data (untuk fallback)
-        const previousUserRatings = [...actorRatingsByUser];
         const currentUserId = isAdminLoggedIn ? "admin" : currentUser;
         
         users = (data.users || []).map(u => ({ ...u, _id: safeString(u._id) }));
@@ -299,7 +248,6 @@ async function loadData(force = false) {
         reports = (data.reports || []).map(r => ({ ...r, _id: safeString(r._id) }));
         actors = (data.actors || []).map(a => ({ ...a, id: safeString(a._id), _id: safeString(a._id), filmsList: a.filmsList || [] }));
         
-        // Load actor ratings - pastikan userId sudah dalam format string yang konsisten
         actorRatingsByUser = (data.actorRatingsByUser || []).map(ar => ({
             ...ar,
             userId: safeString(ar.userId),
@@ -378,24 +326,19 @@ function getTopActors() {
     const map = {};
     const currentUserId = isAdminLoggedIn ? "admin" : currentUser;
     
-    // Hitung rating rata-rata dari semua user
     actorRatingsByUser.forEach(r => {
         if (!map[r.actorName]) map[r.actorName] = { total: 0, count: 0 };
         map[r.actorName].total += r.rating;
         map[r.actorName].count++;
     });
     
-    // Debug: log rating user saat ini
     console.log('Current user:', currentUserId);
     console.log('All actor ratings:', actorRatingsByUser);
     console.log('Current user ratings:', actorRatingsByUser.filter(r => r.userId === currentUserId));
     
     return actors.map(a => {
-        // Cari rating user saat ini untuk aktor ini
         const userRatingData = actorRatingsByUser.find(r => r.actorName === a.name && r.userId === currentUserId);
-        
         console.log(`Actor ${a.name}: userRating = ${userRatingData?.rating || 'none'}`);
-        
         return {
             ...a,
             avgRating: map[a.name] ? (map[a.name].total / map[a.name].count).toFixed(1) : "0.0",
@@ -613,24 +556,8 @@ async function updateActor() {
     });
     
     if (res?.success) { 
-        // Update data actor di array lokal
-        const actorIndex = actors.findIndex(a => a.id === id);
-        if (actorIndex !== -1) {
-            actors[actorIndex] = {
-                ...actors[actorIndex],
-                name: name,
-                bio: bio,
-                photoUrl: photoUrl,
-                filmsList: filmsList
-            };
-        }
-        
-        // Refresh data dari server untuk memastikan sinkron
+        // Refresh data dari server untuk memastikan sinkron (films, actors)
         await loadData(true);
-
-        if (currentView === 'topactors') {
-            renderTopActors();
-        }
         closeEditActorModal(); 
         showToast(`Aktor "${name}" diperbarui!`, "success");
         
@@ -663,11 +590,10 @@ async function rateActor(actorName, rating) {
     }
     const userId = isAdminLoggedIn ? "admin" : currentUser;
     
-    // Simpan rating lama untuk rollback jika gagal
     const oldRatingIndex = actorRatingsByUser.findIndex(r => r.actorName === actorName && r.userId === userId);
     const oldRating = oldRatingIndex !== -1 ? actorRatingsByUser[oldRatingIndex].rating : null;
     
-    // UPDATE UI SEGERA (optimistic update)
+    // Optimistic update
     if (oldRatingIndex !== -1) {
         actorRatingsByUser[oldRatingIndex].rating = rating;
     } else {
@@ -679,12 +605,10 @@ async function rateActor(actorName, rating) {
         });
     }
     
-    // Langsung render ulang halaman top actors jika sedang aktif
     if (currentView === 'topactors') {
         renderTopActors();
     }
     
-    // Update modal actor jika terbuka
     const actorModal = document.getElementById('actorModal');
     if (actorModal) {
         const stars = actorModal.querySelectorAll('.fa-star[data-actor]');
@@ -696,12 +620,11 @@ async function rateActor(actorName, rating) {
         if (ratingSpan) ratingSpan.textContent = `${rating}/5`;
     }
 
-    if (actorModal && name) {
+    if (actorModal && actorName) {
         closeActorModal();
-        setTimeout(() => openActorModal(name), 200);
+        setTimeout(() => openActorModal(actorName), 200);
     }
     
-    // Kirim ke server
     const res = await apiCall('/api/actor-ratings', { 
         method: 'POST', 
         body: JSON.stringify({ actorName, userId, rating }) 
@@ -710,7 +633,7 @@ async function rateActor(actorName, rating) {
     if (res?.success) {
         showToast(`⭐ ${actorName}: ${rating}/5 bintang!`, "success");
     } else {
-        // Rollback jika gagal
+        // Rollback
         if (oldRating !== null) {
             if (oldRatingIndex !== -1) {
                 actorRatingsByUser[oldRatingIndex].rating = oldRating;
@@ -725,7 +648,6 @@ async function rateActor(actorName, rating) {
         if (currentView === 'topactors') {
             renderTopActors();
         }
-        // Rollback modal
         if (actorModal && oldRating !== null) {
             const stars = actorModal.querySelectorAll('.fa-star[data-actor]');
             stars.forEach(s => {
@@ -869,7 +791,6 @@ function openFilmModal(id) {
     document.body.insertAdjacentHTML('beforeend', html);
     document.body.style.overflow = "hidden";
     
-    // Attach event listener untuk tombol report
     document.querySelectorAll('.report-btn').forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
@@ -981,11 +902,9 @@ function addCommentToUI(comment) {
 
 // ==================== MODAL ACTOR =======================
 function openActorModal(actorName) {
-    // Cari actor dengan data terbaru dari array actors
     const actor = actors.find(a => a.name === actorName);
     if (!actor) {
         console.error('Actor tidak ditemukan:', actorName);
-        // Coba refresh data dulu
         loadData(true).then(() => {
             const refreshedActor = actors.find(a => a.name === actorName);
             if (refreshedActor) {
@@ -997,14 +916,12 @@ function openActorModal(actorName) {
         return;
     }
     
-    // Hitung rating dari data terbaru
     const actorWithRating = getTopActors().find(a => a.name === actorName);
     const avgRating = actorWithRating?.avgRating || "0.0";
     const ratingCount = actorWithRating?.ratingCount || 0;
     const userRatingValue = actorWithRating?.userRating?.rating || 0;
     const isLoggedIn = !!(currentUser || isAdminLoggedIn);
     
-    // Cari film-film yang dibintangi actor dari data films terbaru
     const actorFilms = films.filter(f => f.actors && f.actors.includes(actor.name));
     
     console.log('Opening actor modal:', actor.name);
@@ -1079,7 +996,6 @@ function openActorModal(actorName) {
     document.body.insertAdjacentHTML('beforeend', modalHtml);
     document.body.style.overflow = "hidden";
     
-    // Attach event listener untuk rating stars di modal
     if (isLoggedIn) {
         document.querySelectorAll('#actorModal .fa-star[data-actor]').forEach(star => {
             star.onclick = (e) => {
@@ -1087,7 +1003,6 @@ function openActorModal(actorName) {
                 const actorName = star.dataset.actor;
                 const rating = parseInt(star.dataset.rating);
                 rateActor(actorName, rating);
-                // Update tampilan rating di modal setelah rating berhasil
                 setTimeout(() => {
                     const updatedActorWithRating = getTopActors().find(a => a.name === actorName);
                     if (updatedActorWithRating) {
@@ -1434,7 +1349,6 @@ function renderTopActors() {
         const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : `#${i+1}`));
         const userRatingValue = a.userRating?.rating || 0;
         
-        // Buat daftar film yang pernah dibintangi
         const actorFilms = films.filter(f => f.actors && f.actors.includes(a.name));
         const filmsPreviewHtml = actorFilms.slice(0, 3).map(f => `
             <span style="background:#eef2f6; padding:2px 8px; border-radius:20px; font-size:10px; cursor:pointer;" onclick="event.stopPropagation(); openFilmModal('${f.id}')">${escapeHtml(f.title)}</span>
@@ -1489,7 +1403,6 @@ function renderTopActors() {
     html += `</div>`;
     document.getElementById("mainContent").innerHTML = html;
     
-    // Attach event listener untuk rating actor
     document.querySelectorAll('.rating-star').forEach(star => {
         star.onclick = (e) => {
             e.stopPropagation();
@@ -1735,7 +1648,6 @@ function closeEditFilmModal() { const m = document.getElementById("editFilmModal
 function openAddActorModal() {
     if (!isAdminLoggedIn) { showToast("Hanya admin!", "error"); return; }
     
-    // Buat opsi film dari daftar film yang ada
     const filmOptions = films.map(f => `<option value="${escapeHtml(f.title)}">${escapeHtml(f.title)} (${f.year})</option>`).join('');
     
     const html = `
@@ -1789,7 +1701,6 @@ function openEditActorModal(name) {
     console.log('Editing actor:', actor);
     console.log('Current filmsList:', actor.filmsList);
     
-    // Buat opsi film dengan selected jika film sudah dipilih actor
     const filmOptions = films.map(f => {
         const isSelected = actor.filmsList && actor.filmsList.includes(f.title);
         return `<option value="${escapeHtml(f.title)}" ${isSelected ? 'selected' : ''}>${escapeHtml(f.title)} (${f.year})</option>`;
