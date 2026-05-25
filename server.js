@@ -664,7 +664,7 @@ mongoose.connect(process.env.MONGODB_URI, mongooseOptions)
         if (userCount === 0) {
             console.log('🌱 Seeding default users...');
             await User.create([
-                { username: "admin", password: "fajar", displayName: "Administrator", isAdmin: true, bio: "Administrator IDB" },
+                { username: "admin", password: "admin123", displayName: "Administrator", isAdmin: true, bio: "Administrator IDB" },
             ]);
         }
         
